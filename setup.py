@@ -64,7 +64,9 @@ class BurndownSetup:
         self.config_data["mcpServers"]["github"] = {
             "command": MCP_SERVERS["github"]["command"],
             "args": MCP_SERVERS["github"]["args"],
-            "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token},
+            "env": {
+                "GITHUB_PERSONAL_ACCESS_TOKEN": token
+            },
             "disabled": False,
             "autoApprove": []
         }
@@ -101,8 +103,8 @@ class BurndownSetup:
         """
         base_path = self._get_vscode_settings_path()
         
-        # The specific path for RooCode/Cline
-        roo_path = base_path / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json"
+        # CORRECTED PATH: mcp_settings.json
+        roo_path = base_path / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json"
 
         # 1. Check if it exists exactly where we expect
         if roo_path.exists():
@@ -112,7 +114,7 @@ class BurndownSetup:
         if self.is_devcontainer:
             # In devcontainers, sometimes it's under /root/.vscode-server/
             vscode_server = Path.home() / ".vscode-server" / "data" / "User" / "globalStorage"
-            server_path = vscode_server / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json"
+            server_path = vscode_server / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json"
             if server_path.exists():
                 return server_path, True
 
