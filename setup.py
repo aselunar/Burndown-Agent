@@ -25,6 +25,10 @@ class BurndownSetup:
         self.os_type = platform.system()
         self.is_devcontainer = self._check_devcontainer()
         self.config_data = {"mcpServers": {}}
+        self.env_file_path = Path(".env")
+        self.collected_secrets = {}
+        # Load existing .env if present
+        self._load_env_file()
 
     def _check_devcontainer(self) -> bool:
         """Detects if we are running inside a DevContainer."""
@@ -42,17 +46,41 @@ class BurndownSetup:
             sys.exit(1)
         print("✅ Node.js runtime (npx) detected.")
 
+    def _load_env_file(self):
+        """Simple .env parser to avoid external dependencies like python-dotenv."""
+        if not self.env_file_path.exists():
+            return
+        
+        print(f"ℹ️  Loading environment variables from {self.env_file_path}")
+        try:
+            with open(self.env_file_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    # Remove potential surrounding quotes
+                    value = value.strip("'").strip('"')
+                    # Set in os.environ so get_user_input can find it
+                    if key not in os.environ:
+                        os.environ[key] = value
+        except Exception as e:
+            print(f"⚠️  Warning: Could not read .env file: {e}")
+
     def get_user_input(self, prompt: str, env_var: str) -> str:
         """Gets input from Env Var first, then prompts user."""
         value = os.environ.get(env_var)
         if value:
             print(f"   Found {env_var} in environment.")
+            # Store found value in collected secrets in case we want to save to .env later
+            self.collected_secrets[env_var] = value
             return value
         
         try:
             val = input(f"   Enter {prompt}: ").strip()
             if not val:
                 raise ValueError("Value cannot be empty")
+            self.collected_secrets[env_var] = val
             return val
         except KeyboardInterrupt:
             print("\nSetup cancelled.")
@@ -128,26 +156,57 @@ class BurndownSetup:
         
         if exists:
             print(f"✅ Found existing configuration at: {target_path}")
-            choice = input("   Merge new settings into this file? (y/n): ").lower()
-            if choice == 'y':
-                self._merge_and_save(target_path)
-                return
+            # In automated environments (CI/DevContainer rebuilds), we might want to skip this prompt
+            # But for safety, we default to merging.
+            if not self.is_devcontainer:
+                 choice = input("   Merge new settings into this file? (y/n): ").lower()
+                 if choice != 'y':
+                     print("   Skipping direct file update.")
+                     return
+            self._merge_and_save(target_path)
+
         else:
             print(f"⚠️  Configuration file not found.")
             print(f"   Proposed location: {target_path}")
-            choice = input("   Create new configuration file here? (y/n): ").lower()
-            if choice == 'y':
+            
+            # Auto-create in devcontainer to ensure smooth setup
+            if self.is_devcontainer:
+                print("   DevContainer detected: Automatically creating configuration file.")
                 self._create_fresh_file(target_path)
-                return
-
-        # Fallback: Save to local directory
-        local_file = Path("burndown_mcp_config.json")
-        print(f"\n📂 Saving to local file instead: {local_file.absolute()}")
-        with open(local_file, "w") as f:
-            json.dump(self.config_data, f, indent=2)
+            else:
+                choice = input("   Create new configuration file here? (y/n): ").lower()
+                if choice == 'y':
+                    self._create_fresh_file(target_path)
+                else:
+                    # Fallback: Save to local directory
+                    local_file = Path("burndown_mcp_config.json")
+                    print(f"\n📂 Saving to local file instead: {local_file.absolute()}")
+                    with open(local_file, "w") as f:
+                        json.dump(self.config_data, f, indent=2)
+                    self._update_gitignore(local_file.name)
         
-        self._update_gitignore(local_file.name)
-        print("   -> Copy the content of this file into your RooCode/Cline MCP settings manually.")
+        self._prompt_save_dotenv()
+
+    def _prompt_save_dotenv(self):
+        """Offers to save collected secrets to .env for future automation."""
+        # If we already have a .env file, we assume the user is happy or we already loaded from it
+        if self.env_file_path.exists():
+            return
+
+        print("\n--- Persistence Setup ---")
+        print("   To avoid entering these tokens again (e.g., when rebuilding the DevContainer),")
+        print("   we can save them to a local .env file. This file will be git-ignored.")
+        choice = input("   Create .env file with these credentials? (y/n): ").lower()
+        
+        if choice == 'y':
+            try:
+                with open(self.env_file_path, "w") as f:
+                    for key, val in self.collected_secrets.items():
+                        f.write(f"{key}={val}\n")
+                print(f"✅ Created {self.env_file_path}")
+                self._update_gitignore(self.env_file_path.name)
+            except Exception as e:
+                print(f"❌ Error creating .env file: {e}")
 
     def _update_gitignore(self, filename: str):
         """Adds the local config file to .gitignore to prevent accidental commits."""
@@ -168,7 +227,7 @@ class BurndownSetup:
             with open(gitignore_path, "a") as f:
                 if content and not content.endswith("\n"):
                     f.write("\n")
-                f.write(f"\n# Local MCP Config (Secrets)\n{filename}\n")
+                f.write(f"\n# Local Secrets\n{filename}\n")
             
             action = "Updated" if gitignore_path.exists() else "Created"
             print(f"✅ {action} .gitignore to exclude '{filename}'")
