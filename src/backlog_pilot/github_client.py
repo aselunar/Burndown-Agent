@@ -4,7 +4,7 @@ GitHub client for Backlog Pilot.
 Provides integration with GitHub repositories and pull requests.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from github import Github, GithubException
 
@@ -101,7 +101,7 @@ class GitHubClient:
         self,
         state: str = "open",
         limit: int = 10
-    ) -> list[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """
         List pull requests.
         
@@ -133,7 +133,7 @@ class GitHubClient:
         self,
         title: str,
         body: Optional[str] = None,
-        labels: Optional[list[str]] = None
+        labels: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Create a GitHub issue.
