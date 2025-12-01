@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 # --- Configuration Constants ---
-
-# The specific MCP servers we want to configure
 MCP_SERVERS = {
     "github": {
         "command": "npx",
@@ -17,7 +15,7 @@ MCP_SERVERS = {
     },
     "azure-devops": {
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-azure-devops"], # Assuming standard package naming convention
+        "args": ["-y", "@modelcontextprotocol/server-azure-devops"],
         "env_vars": ["AZURE_DEVOPS_TOKEN", "AZURE_DEVOPS_ORG_URL"]
     }
 }
@@ -30,12 +28,8 @@ class BurndownSetup:
 
     def _check_devcontainer(self) -> bool:
         """Detects if we are running inside a DevContainer."""
-        # Common env vars set by VS Code DevContainers and Codespaces
-        if os.environ.get("REMOTE_CONTAINERS"):
+        if os.environ.get("REMOTE_CONTAINERS") or os.environ.get("CODESPACES"):
             return True
-        if os.environ.get("CODESPACES"):
-            return True
-        # Check for generic container indicators
         if os.path.exists("/.dockerenv"):
             return True
         return False
@@ -44,21 +38,17 @@ class BurndownSetup:
         """Ensures npx is available in the path."""
         if not shutil.which("npx"):
             print("❌ Error: 'npx' is not found in your PATH.")
-            print("   Please install Node.js (which includes npx) to use these MCP servers.")
+            print("   Please install Node.js to use these MCP servers.")
             sys.exit(1)
         print("✅ Node.js runtime (npx) detected.")
 
     def get_user_input(self, prompt: str, env_var: str) -> str:
-        """
-        Gets input from Environment Variable first, then prompts user.
-        This makes it automatable in CI/CD or DevContainers.
-        """
+        """Gets input from Env Var first, then prompts user."""
         value = os.environ.get(env_var)
         if value:
             print(f"   Found {env_var} in environment.")
             return value
         
-        # Interactive prompt if not in env
         try:
             val = input(f"   Enter {prompt}: ").strip()
             if not val:
@@ -71,13 +61,10 @@ class BurndownSetup:
     def configure_github(self):
         print("\n--- Configuring GitHub MCP ---")
         token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
-        
         self.config_data["mcpServers"]["github"] = {
             "command": MCP_SERVERS["github"]["command"],
             "args": MCP_SERVERS["github"]["args"],
-            "env": {
-                "GITHUB_PERSONAL_ACCESS_TOKEN": token
-            },
+            "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token},
             "disabled": False,
             "autoApprove": []
         }
@@ -86,7 +73,6 @@ class BurndownSetup:
         print("\n--- Configuring Azure DevOps MCP ---")
         url = self.get_user_input("Azure DevOps Org URL (e.g. https://dev.azure.com/myorg)", "AZURE_DEVOPS_ORG_URL")
         token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_TOKEN")
-
         self.config_data["mcpServers"]["azure-devops"] = {
             "command": MCP_SERVERS["azure-devops"]["command"],
             "args": MCP_SERVERS["azure-devops"]["args"],
@@ -98,54 +84,110 @@ class BurndownSetup:
             "autoApprove": []
         }
 
-    def attempt_auto_locate_roocode(self) -> Optional[Path]:
-        """
-        Attempts to find the RooCode/Cline configuration file based on OS.
-        """
+    def _get_vscode_settings_path(self) -> Path:
+        """Returns the standard path for VS Code User Global Storage."""
         home = Path.home()
-        possible_paths = []
-
         if self.os_type == "Windows":
-            base =  Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage"
-            possible_paths.append(base / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json")
+            return Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage"
         elif self.os_type == "Darwin": # macOS
-            base = home / "Library" / "Application Support" / "Code" / "User" / "globalStorage"
-            possible_paths.append(base / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json")
+            return home / "Library" / "Application Support" / "Code" / "User" / "globalStorage"
         else: # Linux / DevContainer
-            # Standard local Linux
-            base = home / ".config" / "Code" / "User" / "globalStorage"
-            possible_paths.append(base / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json")
-            
-            # VS Code Server (DevContainers)
-            # Paths here are tricky and vary by version, but often mirror local structure relative to home
-            base_server = home / ".vscode-server" / "data" / "User" / "globalStorage"
-            possible_paths.append(base_server / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json")
+            # Standard fallback for Linux/DevContainers
+            return home / ".config" / "Code" / "User" / "globalStorage"
 
-        for p in possible_paths:
-            if p.exists():
-                return p
+    def locate_or_define_path(self) -> tuple[Path, bool]:
+        """
+        Returns: (Path to config file, boolean: True if file exists, False if it needs creation)
+        """
+        base_path = self._get_vscode_settings_path()
         
-        return None
+        # The specific path for RooCode/Cline
+        roo_path = base_path / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json"
+
+        # 1. Check if it exists exactly where we expect
+        if roo_path.exists():
+            return roo_path, True
+
+        # 2. Check if we are in a devcontainer (paths are messy here)
+        if self.is_devcontainer:
+            # In devcontainers, sometimes it's under /root/.vscode-server/
+            vscode_server = Path.home() / ".vscode-server" / "data" / "User" / "globalStorage"
+            server_path = vscode_server / "rooveterinaryinc.roo-cline" / "settings" / "cline_mcp_settings.json"
+            if server_path.exists():
+                return server_path, True
+
+        # 3. Return the standard path for creation
+        return roo_path, False
 
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
         
-        target_path = self.attempt_auto_locate_roocode()
+        target_path, exists = self.locate_or_define_path()
         
-        # Determine output mode
-        if target_path:
-            print(f"✅ Detected RooCode config at: {target_path}")
-            choice = input("   Update this file directly? (y/n): ").lower()
+        if exists:
+            print(f"✅ Found existing configuration at: {target_path}")
+            choice = input("   Merge new settings into this file? (y/n): ").lower()
             if choice == 'y':
                 self._merge_and_save(target_path)
                 return
-        
+        else:
+            print(f"⚠️  Configuration file not found.")
+            print(f"   Proposed location: {target_path}")
+            choice = input("   Create new configuration file here? (y/n): ").lower()
+            if choice == 'y':
+                self._create_fresh_file(target_path)
+                return
+
         # Fallback: Save to local directory
         local_file = Path("burndown_mcp_config.json")
-        print(f"⚠️  Could not automatically inject config. Saving to local file: {local_file.absolute()}")
+        print(f"\n📂 Saving to local file instead: {local_file.absolute()}")
         with open(local_file, "w") as f:
             json.dump(self.config_data, f, indent=2)
-        print("   -> Copy the content of this file into your RooCode/Cline MCP settings.")
+        
+        self._update_gitignore(local_file.name)
+        print("   -> Copy the content of this file into your RooCode/Cline MCP settings manually.")
+
+    def _update_gitignore(self, filename: str):
+        """Adds the local config file to .gitignore to prevent accidental commits."""
+        gitignore_path = Path(".gitignore")
+        
+        try:
+            # Read existing content if file exists
+            content = ""
+            if gitignore_path.exists():
+                with open(gitignore_path, "r") as f:
+                    content = f.read()
+            
+            # Check if already ignored
+            if filename in content:
+                return
+
+            # Append to .gitignore
+            with open(gitignore_path, "a") as f:
+                if content and not content.endswith("\n"):
+                    f.write("\n")
+                f.write(f"\n# Local MCP Config (Secrets)\n{filename}\n")
+            
+            action = "Updated" if gitignore_path.exists() else "Created"
+            print(f"✅ {action} .gitignore to exclude '{filename}'")
+            
+        except Exception as e:
+            print(f"⚠️  Could not update .gitignore: {e}")
+
+    def _create_fresh_file(self, path: Path):
+        """Creates directories and the file."""
+        try:
+            # Create the directory structure (e.g. .../settings/)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(path, "w") as f:
+                json.dump(self.config_data, f, indent=2)
+            print(f"✅ Created new configuration file at: {path}")
+        except PermissionError:
+            print("❌ Permission denied. Cannot create file at that location.")
+            print("   Please check your permissions or run as administrator.")
+        except Exception as e:
+            print(f"❌ Error creating file: {e}")
 
     def _merge_and_save(self, path: Path):
         """Merges new config with existing to avoid deleting other tools."""
@@ -155,11 +197,9 @@ class BurndownSetup:
         except (json.JSONDecodeError, FileNotFoundError):
             existing_data = {"mcpServers": {}}
 
-        # Ensure mcpServers key exists
         if "mcpServers" not in existing_data:
             existing_data["mcpServers"] = {}
 
-        # Update only our specific keys
         existing_data["mcpServers"].update(self.config_data["mcpServers"])
 
         with open(path, "w") as f:
@@ -168,17 +208,14 @@ class BurndownSetup:
 
     def run(self):
         print(f"🔥 Burndown Agent Setup Initialized")
-        print(f"   Environment: {'DevContainer' if self.is_devcontainer else 'Local System'}")
         
         self._verify_node_exists()
-        
         self.configure_github()
         self.configure_azure()
-        
         self.save_configuration()
-        print("\n🎉 Setup Complete. Please restart RooCode/VS Code to load changes.")
+        
+        print("\n🎉 Setup Complete. Restart RooCode/VS Code to apply.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
     setup.run()
-    
