@@ -114,6 +114,15 @@ class AzureDevOpsClient:
             expand="All"
         )
         
+        # Get URL safely from links
+        url = ""
+        if hasattr(work_item, '_links') and work_item._links:
+            try:
+                url = work_item._links.additional_properties.get("html", {}).get("href", "")
+            except (AttributeError, KeyError):
+                # If the structure changes, fall back to constructing the URL
+                url = f"{self.organization_url}/{self.config.azure_project}/_workitems/edit/{work_item_id}"
+        
         return {
             "id": work_item.id,
             "title": work_item.fields.get("System.Title", ""),
@@ -123,7 +132,7 @@ class AzureDevOpsClient:
             "description": work_item.fields.get("System.Description", ""),
             "assigned_to": work_item.fields.get("System.AssignedTo", {}).get("displayName")
                 if work_item.fields.get("System.AssignedTo") else None,
-            "url": work_item._links.additional_properties.get("html", {}).get("href", ""),
+            "url": url,
         }
     
     def update_work_item(

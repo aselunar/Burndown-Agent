@@ -113,19 +113,23 @@ class GitHubClient:
             List of pull requests
         """
         try:
-            prs = self.repo.get_pulls(state=state)[:limit]
+            # Use per_page parameter for efficient pagination
+            prs_iterator = self.repo.get_pulls(state=state)
+            prs = []
             
-            return [
-                {
+            for pr in prs_iterator:
+                if len(prs) >= limit:
+                    break
+                prs.append({
                     "number": pr.number,
                     "title": pr.title,
                     "url": pr.html_url,
                     "state": pr.state,
                     "head": pr.head.ref,
                     "base": pr.base.ref,
-                }
-                for pr in prs
-            ]
+                })
+            
+            return prs
         except GithubException as e:
             raise Exception(f"Failed to list PRs: {e}")
     

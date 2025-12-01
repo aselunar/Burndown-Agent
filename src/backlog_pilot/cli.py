@@ -4,6 +4,7 @@ Command-line interface for Backlog Pilot.
 This module provides the main CLI entry point for the backlog-pilot tool.
 """
 
+import re
 import sys
 from typing import Optional
 
@@ -13,6 +14,35 @@ from backlog_pilot import __version__
 from backlog_pilot.config import Config
 from backlog_pilot.azure_devops import AzureDevOpsClient
 from backlog_pilot.github_client import GitHubClient
+
+
+def sanitize_branch_name(name: str) -> str:
+    """
+    Sanitize a string to be a valid Git branch name.
+    
+    Args:
+        name: The string to sanitize
+    
+    Returns:
+        A valid Git branch name
+    """
+    # Convert to lowercase and replace spaces with hyphens
+    name = name.lower().replace(' ', '-')
+    
+    # Remove invalid characters (keep alphanumeric, hyphens, underscores, slashes)
+    name = re.sub(r'[^a-z0-9\-_/]', '', name)
+    
+    # Remove consecutive hyphens
+    name = re.sub(r'-+', '-', name)
+    
+    # Remove leading/trailing hyphens
+    name = name.strip('-')
+    
+    # Truncate to reasonable length
+    if len(name) > 50:
+        name = name[:50].rstrip('-')
+    
+    return name or 'feature'
 
 
 @click.group()
@@ -110,7 +140,8 @@ def create_pr(item_id: str, branch: Optional[str]) -> None:
         
         # Generate branch name if not provided
         if not branch:
-            branch = f"feature/{item_id}-{work_item['title'][:30].lower().replace(' ', '-')}"
+            sanitized_title = sanitize_branch_name(work_item['title'])
+            branch = f"feature/{item_id}-{sanitized_title}"
             click.echo(f"Generated branch name: {branch}")
         
         # Create PR
