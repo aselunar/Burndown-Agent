@@ -14,9 +14,10 @@ MCP_SERVERS = {
         "env_vars": ["GITHUB_PERSONAL_ACCESS_TOKEN"]
     },
     "azure-devops": {
+        # EXACT MATCH for your working configuration
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-azure-devops"],
-        "env_vars": ["AZURE_DEVOPS_TOKEN", "AZURE_DEVOPS_ORG_URL"]
+        "args": ["-y", "@azure-devops/mcp@1.0.0"], 
+        "env_vars": ["AZURE_DEVOPS_EXT_PAT"]
     }
 }
 
@@ -24,12 +25,11 @@ class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
         
-        # ANCHOR: Project Root is where we are running the script
+        # ANCHOR: Project Root is where we are running the script (Current Working Directory)
         self.project_root = Path.cwd()
         self.env_file_path = self.project_root / ".env"
         
-        # TARGET: Project-specific setting (Project Isolation)
-        # Note: Depending on your specific extension version, this might need to be ".cline/mcp.json"
+        # TARGET: Project-specific setting (.roo/mcp.json)
         self.settings_dir = self.project_root / ".roo" 
         self.settings_file = self.settings_dir / "mcp.json"
 
@@ -86,8 +86,17 @@ class BurndownSetup:
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
         print("\n--- Configuring Azure DevOps MCP ---")
-        ado_url = self.get_user_input("Azure DevOps Org URL", "AZURE_DEVOPS_ORG_URL")
-        ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_TOKEN")
+        # 1. Ask for Organization Name (Required argument for this package)
+        ado_org = self.get_user_input("Azure DevOps Organization Name (e.g. CropScience-1)", "AZURE_DEVOPS_ORG")
+        
+        # 2. Ask for the Token (New variable name)
+        ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
+
+        # 3. Construct the Args list dynamically
+        # We start with ["-y", "@azure-devops/mcp@1.0.0"]
+        ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
+        # We append the Organization Name as the final argument
+        ado_args.append(ado_org) 
 
         self.config_data["mcpServers"] = {
             "github": {
@@ -99,10 +108,9 @@ class BurndownSetup:
             },
             "azure-devops": {
                 "command": MCP_SERVERS["azure-devops"]["command"],
-                "args": MCP_SERVERS["azure-devops"]["args"],
+                "args": ado_args, # This will be ["-y", "@azure-devops/mcp@1.0.0", "CropScience-1"]
                 "env": { 
-                    "AZURE_DEVOPS_ORG_URL": ado_url,
-                    "AZURE_DEVOPS_TOKEN": ado_token 
+                    "AZURE_DEVOPS_EXT_PAT": ado_token 
                 },
                 "disabled": False,
                 "autoApprove": []
@@ -144,7 +152,6 @@ class BurndownSetup:
             print(f"✅ Created new configuration file at: {self.settings_file}")
 
         # 3. CRITICAL: Add to .gitignore
-        # We ignore the entire .roo folder to be safe, or just the json
         self._update_gitignore(".roo/")
         self._save_secrets_to_env()
 
