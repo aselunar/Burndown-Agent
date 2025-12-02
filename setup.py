@@ -22,26 +22,19 @@ MCP_SERVERS = {
 
 class BurndownSetup:
     def __init__(self):
-        self.os_type = platform.system()
-        self.is_devcontainer = self._check_devcontainer()
         self.config_data = {"mcpServers": {}}
         
-        # ANCHOR: Use Current Working Directory (CWD) instead of Script Location
-        # This allows us to run the script from /tmp but save .env to the project root
+        # ANCHOR: Project Root is where we are running the script
         self.project_root = Path.cwd()
         self.env_file_path = self.project_root / ".env"
         
-        self.collected_secrets = {}
-        # Load existing .env if present
-        self._load_env_file()
+        # TARGET: Project-specific setting (Project Isolation)
+        # Note: Depending on your specific extension version, this might need to be ".cline/mcp.json"
+        self.settings_dir = self.project_root / ".roo" 
+        self.settings_file = self.settings_dir / "mcp.json"
 
-    def _check_devcontainer(self) -> bool:
-        """Detects if we are running inside a DevContainer."""
-        if os.environ.get("REMOTE_CONTAINERS") or os.environ.get("CODESPACES"):
-            return True
-        if os.path.exists("/.dockerenv"):
-            return True
-        return False
+        self.collected_secrets = {}
+        self._load_env_file()
 
     def _verify_node_exists(self):
         """Ensures npx is available in the path."""
@@ -52,7 +45,7 @@ class BurndownSetup:
         print("✅ Node.js runtime (npx) detected.")
 
     def _load_env_file(self):
-        """Simple .env parser to avoid external dependencies like python-dotenv."""
+        """Simple .env parser."""
         if not self.env_file_path.exists():
             return
         
@@ -88,107 +81,75 @@ class BurndownSetup:
             print("\nSetup cancelled.")
             sys.exit(0)
 
-    def configure_github(self):
+    def configure_servers(self):
         print("\n--- Configuring GitHub MCP ---")
-        token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
-        self.config_data["mcpServers"]["github"] = {
-            "command": MCP_SERVERS["github"]["command"],
-            "args": MCP_SERVERS["github"]["args"],
-            "env": {
-                "GITHUB_PERSONAL_ACCESS_TOKEN": token
-            },
-            "disabled": False,
-            "autoApprove": []
-        }
-
-    def configure_azure(self):
+        gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
+        
         print("\n--- Configuring Azure DevOps MCP ---")
-        url = self.get_user_input("Azure DevOps Org URL (e.g. https://dev.azure.com/myorg)", "AZURE_DEVOPS_ORG_URL")
-        token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_TOKEN")
-        self.config_data["mcpServers"]["azure-devops"] = {
-            "command": MCP_SERVERS["azure-devops"]["command"],
-            "args": MCP_SERVERS["azure-devops"]["args"],
-            "env": {
-                "AZURE_DEVOPS_ORG_URL": url,
-                "AZURE_DEVOPS_TOKEN": token
+        ado_url = self.get_user_input("Azure DevOps Org URL", "AZURE_DEVOPS_ORG_URL")
+        ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_TOKEN")
+
+        self.config_data["mcpServers"] = {
+            "github": {
+                "command": MCP_SERVERS["github"]["command"],
+                "args": MCP_SERVERS["github"]["args"],
+                "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": gh_token },
+                "disabled": False,
+                "autoApprove": []
             },
-            "disabled": False,
-            "autoApprove": []
+            "azure-devops": {
+                "command": MCP_SERVERS["azure-devops"]["command"],
+                "args": MCP_SERVERS["azure-devops"]["args"],
+                "env": { 
+                    "AZURE_DEVOPS_ORG_URL": ado_url,
+                    "AZURE_DEVOPS_TOKEN": ado_token 
+                },
+                "disabled": False,
+                "autoApprove": []
+            }
         }
-
-    def _get_vscode_settings_path(self) -> Path:
-        """Returns the standard path for VS Code User Global Storage."""
-        home = Path.home()
-        if self.os_type == "Windows":
-            return Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage"
-        elif self.os_type == "Darwin": # macOS
-            return home / "Library" / "Application Support" / "Code" / "User" / "globalStorage"
-        else: # Linux / DevContainer
-            # Standard fallback for Linux/DevContainers
-            return home / ".config" / "Code" / "User" / "globalStorage"
-
-    def locate_or_define_path(self) -> tuple[Path, bool]:
-        """
-        Returns: (Path to config file, boolean: True if file exists, False if it needs creation)
-        """
-        base_path = self._get_vscode_settings_path()
-        roo_path = base_path / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json"
-
-        # 1. DevContainer Priority Check
-        if self.is_devcontainer:
-            # VS Code Server specific path
-            vscode_server = Path.home() / ".vscode-server" / "data" / "User" / "globalStorage"
-            server_path = vscode_server / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json"
-            
-            # If exists, return it. If not, return it as the target for creation.
-            if server_path.exists():
-                return server_path, True
-            return server_path, False
-
-        # 2. Local Desktop Check
-        if roo_path.exists():
-            return roo_path, True
-
-        return roo_path, False
 
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
         
-        target_path, exists = self.locate_or_define_path()
-        
-        if exists:
-            print(f"✅ Found existing configuration at: {target_path}")
-            if not self.is_devcontainer:
-                 choice = input("   Merge new settings into this file? (y/n): ").lower()
-                 if choice != 'y':
-                     print("   Skipping direct file update.")
-                     return
-            self._merge_and_save(target_path)
+        # 1. Create the .roo directory if missing
+        try:
+            self.settings_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"❌ Error creating directory {self.settings_dir}: {e}")
+            return
 
-        else:
-            print(f"⚠️  Configuration file not found.")
-            print(f"   Proposed location: {target_path}")
+        # 2. Check for existing config
+        if self.settings_file.exists():
+            print(f"✅ Found existing configuration at: {self.settings_file}")
+            # Merge logic
+            try:
+                with open(self.settings_file, "r") as f:
+                    existing = json.load(f)
+            except:
+                existing = {"mcpServers": {}}
             
-            if self.is_devcontainer:
-                print("   DevContainer detected: Automatically creating configuration file.")
-                self._create_fresh_file(target_path)
-            else:
-                choice = input("   Create new configuration file here? (y/n): ").lower()
-                if choice == 'y':
-                    self._create_fresh_file(target_path)
-                else:
-                    local_file = self.project_root / "burndown_mcp_config.json"
-                    print(f"\n📂 Saving to local file instead: {local_file.absolute()}")
-                    with open(local_file, "w") as f:
-                        json.dump(self.config_data, f, indent=2)
-                    self._update_gitignore(local_file.name)
-        
+            if "mcpServers" not in existing:
+                existing["mcpServers"] = {}
+            
+            existing["mcpServers"].update(self.config_data["mcpServers"])
+            
+            with open(self.settings_file, "w") as f:
+                json.dump(existing, f, indent=2)
+            print("✅ Configuration updated.")
+        else:
+            # Create new
+            with open(self.settings_file, "w") as f:
+                json.dump(self.config_data, f, indent=2)
+            print(f"✅ Created new configuration file at: {self.settings_file}")
+
+        # 3. CRITICAL: Add to .gitignore
+        # We ignore the entire .roo folder to be safe, or just the json
+        self._update_gitignore(".roo/")
         self._save_secrets_to_env()
 
     def _save_secrets_to_env(self):
-        """Saves collected secrets to .env, APPENDING if file exists."""
-        
-        # 1. Read existing content to avoid duplicates
+        """Saves collected secrets to .env"""
         existing_content = ""
         if self.env_file_path.exists():
             with open(self.env_file_path, "r") as f:
@@ -200,84 +161,50 @@ class BurndownSetup:
                 new_lines.append(f"{key}={val}")
         
         if not new_lines:
-            return # Nothing to add
+            return
 
         print("\n--- Persistence Setup ---")
-        print(f"   Updating {self.env_file_path.name} to include new secrets...")
-        
-        # 2. Append or Create
         mode = "a" if self.env_file_path.exists() else "w"
         try:
             with open(self.env_file_path, mode) as f:
-                # Ensure we start on a new line if appending
                 if mode == "a" and existing_content and not existing_content.endswith("\n"):
                     f.write("\n")
                 for line in new_lines:
                     f.write(f"{line}\n")
             
             print(f"✅ Saved secrets to {self.env_file_path}")
-            self._update_gitignore(self.env_file_path.name)
+            self._update_gitignore(".env")
         except Exception as e:
             print(f"❌ Error saving .env: {e}")
 
-    def _update_gitignore(self, filename: str):
-        """Adds the local config file to .gitignore to prevent accidental commits."""
+    def _update_gitignore(self, entry: str):
+        """Adds entry to .gitignore."""
         gitignore_path = self.project_root / ".gitignore"
-        
         try:
             content = ""
             if gitignore_path.exists():
                 with open(gitignore_path, "r") as f:
                     content = f.read()
             
-            if filename in content:
+            if entry in content:
                 return
 
             with open(gitignore_path, "a") as f:
                 if content and not content.endswith("\n"):
                     f.write("\n")
-                f.write(f"\n# Local Secrets\n{filename}\n")
+                f.write(f"\n# Local Secrets\n{entry}\n")
             
             action = "Updated" if gitignore_path.exists() else "Created"
-            print(f"✅ {action} .gitignore to exclude '{filename}'")
-            
+            print(f"✅ {action} .gitignore to exclude '{entry}'")
         except Exception as e:
             print(f"⚠️  Could not update .gitignore: {e}")
 
-    def _create_fresh_file(self, path: Path):
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w") as f:
-                json.dump(self.config_data, f, indent=2)
-            print(f"✅ Created new configuration file at: {path}")
-        except Exception as e:
-            print(f"❌ Error creating file: {e}")
-
-    def _merge_and_save(self, path: Path):
-        try:
-            with open(path, "r") as f:
-                existing_data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            existing_data = {"mcpServers": {}}
-
-        if "mcpServers" not in existing_data:
-            existing_data["mcpServers"] = {}
-
-        existing_data["mcpServers"].update(self.config_data["mcpServers"])
-
-        with open(path, "w") as f:
-            json.dump(existing_data, f, indent=2)
-        print("✅ Configuration updated successfully.")
-
     def run(self):
-        print(f"🔥 Burndown Agent Setup Initialized")
-        
+        print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
         self._verify_node_exists()
-        self.configure_github()
-        self.configure_azure()
+        self.configure_servers()
         self.save_configuration()
-        
-        print("\n🎉 Setup Complete. Restart RooCode/VS Code to apply.")
+        print("\n🎉 Setup Complete. Restart RooCode to apply.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
