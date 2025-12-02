@@ -1,29 +1,34 @@
 #!/bin/sh
 
-echo "⬇️  Attempting to download setup.py from host..."
+# 1. Define the target in /tmp (Invisible to your project)
+TARGET="/tmp/setup.py"
 
-# 1. Download: Removed '-s' to show errors. Added fail check.
-# We try to fetch setup.py. If it fails, we exit.
-if curl -L "http://host.docker.internal:8000/setup.py" -o setup.py; then
+# 2. Define a Cleanup Function (The Trap)
+cleanup() {
+    rm -f "$TARGET"
+}
+
+# 3. Set the Trap: Run 'cleanup' on EXIT, Ctrl+C (INT), or Kill (TERM)
+trap cleanup EXIT INT TERM
+
+echo "⬇️  Downloading agent to $TARGET..."
+
+# 4. Download
+if curl -L "http://host.docker.internal:8000/setup.py" -o "$TARGET"; then
     
-    # Check if the file is empty or looks like a 404 error
-    if [ ! -s setup.py ] || grep -q "Error code 404" setup.py; then
-        echo "❌ Error: Downloaded file is empty or 404 Not Found."
-        echo "   -> Verify 'setup.py' exists in the folder where you ran 'python3 -m http.server'"
-        rm setup.py
-        exit 1
+    # Validation
+    if [ ! -s "$TARGET" ] || grep -q "Error code 404" "$TARGET"; then
+        echo "❌ Error: Download failed (404 or empty)."
+        exit 1 # The trap will auto-run rm here
     fi
 
     echo "✅ Download successful. Running setup..."
     
-    # 2. Run: '< /dev/tty' forces Python to read from your keyboard
-    python3 setup.py < /dev/tty
-    
-    # 3. Cleanup
-    rm setup.py
+    # 5. Run Python (Reading from keyboard)
+    # Even if you Ctrl+C here, the 'trap' above ensures cleanup runs.
+    python3 "$TARGET" < /dev/tty
+
 else
     echo "❌ Download failed."
-    echo "   -> Is the server running? (python3 -m http.server 8000)"
-    echo "   -> Can the container reach 'host.docker.internal'?"
     exit 1
 fi
