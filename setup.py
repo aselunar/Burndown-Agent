@@ -299,7 +299,7 @@ class BurndownSetup:
             else:
                 install_cmd = "apt-get update && apt-get install -y python3 python3-pip"
 
-            pip_cmd = "pip install -r .roo/requirements.txt"
+            pip_cmd = "python3 -m venv .roo/venv && .roo/venv/bin/pip install -r .roo/requirements.txt"
 
             current_cmd = data.get("postCreateCommand", "")
             
