@@ -2,8 +2,8 @@ import os
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 
-# Load environment variables
-# We assume this script runs inside .roo/, so .env is one level up
+# Load .env (Assumed to be one level up from .roo/)
+# This allows the script to read the profile name
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_path = os.path.join(project_root, ".env")
 load_dotenv(env_path)
