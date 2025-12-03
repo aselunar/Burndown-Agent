@@ -1,12 +1,10 @@
 import json
 import os
-import platform
 import sys
 import shutil
 import argparse
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional
 
 # --- Configuration Constants ---
 MCP_SERVERS = {
@@ -23,8 +21,6 @@ MCP_SERVERS = {
 }
 
 ROO_EXTENSION_ID = "rooveterinaryinc.roo-cline"
-# In production, replace this with your GitHub Raw URL
-INSTALLER_URL = "http://host.docker.internal:8000/install.sh"
 
 class BurndownSetup:
     def __init__(self):
@@ -56,8 +52,7 @@ class BurndownSetup:
         self._load_env_file()
 
     def _verify_node_exists(self):
-        # We only check for node locally since we assume npx will run inside the target's environment later
-        # But strictly speaking, this check is less relevant if running "remote" setup.
+        # Only relevant for local execution, not strictly needed for config generation
         pass 
 
     def _load_env_file(self):
@@ -155,35 +150,29 @@ class BurndownSetup:
             else:
                 print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
 
-            # 2. Inject Command
-            # Heuristic: Check raw content for "alpine" to guess distro
+            # 2. Inject Python Command (The working one)
             is_alpine = "alpine" in raw_content.lower()
             
-            # The command we verified works
+            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 curl"
             else:
                 install_cmd = "apt-get update && apt-get install -y python3 curl"
 
-            run_setup = f"curl -sL {INSTALLER_URL} | sh"
             current_cmd = data.get("postCreateCommand", "")
             
-            # Helper to append if not present
-            cmd_updates = []
+            # Check if python is already being installed
             if "python3" not in current_cmd:
-                cmd_updates.append(install_cmd)
-            if "install.sh" not in current_cmd:
-                cmd_updates.append(run_setup)
-            
-            if cmd_updates:
                 if current_cmd:
-                    # Append updates to existing command
-                    data["postCreateCommand"] = current_cmd + " && " + " && ".join(cmd_updates)
+                    # Prepend updates to existing command so python is available for subsequent commands
+                    data["postCreateCommand"] = install_cmd + " && " + current_cmd
                 else:
-                    data["postCreateCommand"] = " && ".join(cmd_updates)
+                    data["postCreateCommand"] = install_cmd
                 
-                print(f"✅ Updated postCreateCommand with: {' && '.join(cmd_updates)}")
+                print(f"✅ Injected Python install command ({'Alpine' if is_alpine else 'Debian/Ubuntu'}).")
                 modified = True
+            else:
+                print("ℹ️  Python install command already present.")
 
             if modified:
                 print("⚠️  Updating devcontainer.json (Comments will be removed)...")
@@ -261,15 +250,15 @@ class BurndownSetup:
         except Exception as e: print(f"⚠️  Could not update .gitignore: {e}")
 
     def run(self):
-        print(f"🔥 Burndown Agent Setup Initialized")
+        print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
         self.configure_servers()
         self.save_configuration()
         
-        # Inject the working configuration automatically
+        # Inject Python and Extensions for the future Orchestrator
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("ℹ️  If you updated devcontainer.json, please Rebuild Container.")
+        print("ℹ️  Please Rebuild Container to apply devcontainer.json changes.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
