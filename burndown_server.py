@@ -2,7 +2,7 @@ import os
 import base64
 import requests
 from dotenv import load_dotenv
-from mcp import FastMCP
+from fastmcp import FastMCP
 
 # Environment Setup
 project_root = os.path.dirname(os.path.abspath(__file__))

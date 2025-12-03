@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import subprocess
 import argparse
 import shutil
 import re
@@ -178,7 +179,15 @@ class BurndownSetup:
 
         script_arg = str(script_rel_path)
         if os.name == 'nt':
-            script_arg = script_arg.replace("\\", "/") 
+            script_arg = script_arg.replace("\\", "/")
+
+        if os.name == 'nt':
+            python_cmd = ".roo/venv/Scripts/python.exe"
+        else:
+            python_cmd = ".roo/venv/bin/python"
+        
+        # Use relative path for script
+        script_arg = ".roo/burndown_server.py"
 
         self.config_data["mcpServers"] = {
             "github": {
