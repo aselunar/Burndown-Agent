@@ -2,9 +2,9 @@ import json
 import os
 import sys
 import argparse
-import shutil
-import stat
 import re
+import stat
+import shutil
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -101,7 +101,9 @@ class BurndownSetup:
 
     # --- 2. INSTALL AGENT ASSETS ---
     def install_agent_script(self):
+        """Copies agent script and requirements to target .roo folder."""
         print("\n--- Installing Burndown Agent Assets ---")
+        
         try:
             self.settings_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -166,9 +168,7 @@ class BurndownSetup:
 
     # --- 4. LAUNCH SCRIPT ---
     def create_launch_script(self):
-        """Creates a script to launch VS Code with the enforced Profile."""
         profile_name = self.collected_secrets.get("ROO_CODE_PROFILE_NAME", "default")
-        
         print(f"\n--- Creating Safe Launch Script ({profile_name}) ---")
         
         is_windows = os.name == 'nt'
@@ -191,16 +191,49 @@ class BurndownSetup:
         except Exception as e:
             print(f"❌ Error creating launch script: {e}")
 
-    # --- 5. VS CODE AUTO-RUN TASK (SAFETY NET) ---
+    # --- 5. VS CODE AUTO-RUN TASK (FIXED) ---
     def create_vscode_task(self):
-        """Creates a VS Code Task that runs on folder open to remind the user of the profile."""
+        """Creates a dedicated check script and a task to run it."""
         print(f"\n--- Creating VS Code Auto-Run Task ---")
         vscode_dir = self.project_root / ".vscode"
         tasks_file = vscode_dir / "tasks.json"
         
+        # We create a dedicated python script to avoid shell escaping issues
+        checker_script_path = self.settings_dir / "check_profile.py"
+        
+        checker_content = """import os
+from pathlib import Path
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # Fallback if dotenv not installed yet
+    print("⚠️  python-dotenv not installed. Skipping profile check.")
+    exit(0)
+
+# Load .env from project root (parent of .roo)
+root = Path(__file__).parent.parent
+env_path = root / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+
+profile = os.getenv("ROO_CODE_PROFILE_NAME", "default")
+print(f"\\n🛡️  PROJECT POLICY CHECK")
+print(f"   Required Profile: {profile}")
+print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
+"""
         try:
+            # 1. Write the checker script
+            with open(checker_script_path, "w") as f:
+                f.write(checker_content)
+            
+            # 2. Write the tasks.json
             vscode_dir.mkdir(exist_ok=True)
             
+            # Using relative path for portability
+            relative_script_path = os.path.join(".roo", "check_profile.py")
+            if os.name == 'nt':
+                relative_script_path = relative_script_path.replace("\\", "/")
+
             task_content = {
                 "version": "2.0.0",
                 "tasks": [
@@ -209,8 +242,7 @@ class BurndownSetup:
                         "type": "shell",
                         "command": "python3",
                         "args": [
-                            "-c",
-                            "import os; from dotenv import load_dotenv; load_dotenv(); print(f'\\n🛡️  PROJECT POLICY CHECK\\n   Required Profile: {os.getenv(\"ROO_CODE_PROFILE_NAME\", \"Unknown\")}\\n   Please ensure this profile is selected in Settings > Profiles.\\n')"
+                            relative_script_path
                         ],
                         "presentation": {
                             "reveal": "always",
@@ -224,11 +256,10 @@ class BurndownSetup:
                 ]
             }
             
-            # If file exists, we might want to merge, but for now we overwrite/create to ensure compliance
             with open(tasks_file, "w") as f:
                 json.dump(task_content, f, indent=4)
             
-            print(f"✅ Created .vscode/tasks.json (Runs on Folder Open)")
+            print(f"✅ Created .vscode/tasks.json & .roo/check_profile.py")
             
         except Exception as e:
             print(f"❌ Error creating VS Code Task: {e}")
@@ -258,7 +289,7 @@ class BurndownSetup:
             data = json.loads(json_content)
             modified = False
 
-            # Extensions
+            # A. Extensions
             customizations = data.setdefault("customizations", {})
             vscode_cust = customizations.setdefault("vscode", {})
             extensions = vscode_cust.setdefault("extensions", [])
@@ -267,7 +298,7 @@ class BurndownSetup:
                 print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
                 modified = True
 
-            # Persistence Mount
+            # B. Persistence Mount
             mounts = data.setdefault("mounts", [])
             target_mount = "/home/vscode/.vscode-server/data"
             mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
@@ -276,39 +307,10 @@ class BurndownSetup:
                 print(f"✅ Injected persistence mount.")
                 modified = True
 
-            # Python
+            # C. Python
             is_alpine = "alpine" in raw_content.lower()
+            if not is_alpine: pass 
 
-            if not is_alpine:
-                # Check referenced Docker Compose files
-                compose_files = data.get("dockerComposeFile")
-                if compose_files:
-                    if isinstance(compose_files, str): compose_files = [compose_files]
-                    for cf_name in compose_files:
-                        cf_path = dc_path.parent / cf_name
-                        if cf_path.exists():
-                            try:
-                                with open(cf_path, "r") as cf:
-                                    if "alpine" in cf.read().lower():
-                                        is_alpine = True
-                                        print(f"🔍 Detected Alpine in {cf_name}")
-                                        break
-                            except: pass
-            
-            if not is_alpine:
-                # Check referenced Dockerfile
-                build = data.get("build")
-                if isinstance(build, dict) and "dockerfile" in build:
-                    df_path = dc_path.parent / build["dockerfile"]
-                    if df_path.exists():
-                        try:
-                            with open(df_path, "r") as df:
-                                if "alpine" in df.read().lower():
-                                    is_alpine = True
-                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
-                        except: pass
-
-            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 py3-pip"
             else:
@@ -421,13 +423,14 @@ class BurndownSetup:
         self.configure_servers()
         self.save_configuration()
         self.create_launch_script() 
-        self.create_vscode_task() # NEW: The Auto-Run Check
+        self.create_vscode_task() # FIXED: Generates safe python script
         
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("👉 Use './start_agent.sh' to launch with compliance enforced.")
+        print("👉 Use './start_agent.sh' to launch.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
     setup.run()
+    
