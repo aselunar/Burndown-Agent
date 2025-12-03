@@ -211,3 +211,6 @@ burndown_mcp_config.json
 
 # Local Secrets
 .roo/
+
+# Local Secrets
+start_agent.sh
