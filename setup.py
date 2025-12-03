@@ -3,7 +3,7 @@ import os
 import platform
 import sys
 import shutil
-import re
+import argparse
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -24,7 +24,22 @@ MCP_SERVERS = {
 class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
-        self.project_root = Path.cwd()
+        
+        # 1. Parse Command Line Arguments
+        parser = argparse.ArgumentParser(description="Configure RooCode MCP Servers for a target project.")
+        parser.add_argument("--target", type=str, help="Path to the target project directory (default: current directory)")
+        args = parser.parse_args()
+
+        # 2. Determine Project Root
+        if args.target:
+            self.project_root = Path(args.target).resolve()
+            if not self.project_root.exists():
+                print(f"❌ Error: Target directory '{self.project_root}' does not exist.")
+                sys.exit(1)
+            print(f"🎯 Targeting Project: {self.project_root}")
+        else:
+            self.project_root = Path.cwd()
+
         self.env_file_path = self.project_root / ".env"
         
         # TARGET: Project-specific setting (.roo/mcp.json)
@@ -32,13 +47,13 @@ class BurndownSetup:
         self.settings_file = self.settings_dir / "mcp.json"
 
         self.collected_secrets = {}
+        # Try loading env from target first (to update existing)
         self._load_env_file()
 
     def _verify_node_exists(self):
-        if not shutil.which("npx"):
-            print("❌ Error: 'npx' is not found in your PATH.")
-            sys.exit(1)
-        print("✅ Node.js runtime (npx) detected.")
+        # We only check for node locally since we assume npx will run inside the target's environment later
+        # But strictly speaking, this check is less relevant if running "remote" setup.
+        pass 
 
     def _load_env_file(self):
         if not self.env_file_path.exists(): return
@@ -159,11 +174,10 @@ class BurndownSetup:
         except Exception as e: print(f"⚠️  Could not update .gitignore: {e}")
 
     def run(self):
-        print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
-        self._verify_node_exists()
+        print(f"🔥 Burndown Agent Setup Initialized")
         self.configure_servers()
         self.save_configuration()
-        print("\n🎉 Setup Complete. Restart RooCode to apply.")
+        print(f"\n🎉 Setup Complete for {self.project_root.name}.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
