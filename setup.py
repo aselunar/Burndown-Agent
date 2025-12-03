@@ -2,8 +2,8 @@ import json
 import os
 import sys
 import argparse
-import re
 import shutil
+import stat
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -131,7 +131,20 @@ class BurndownSetup:
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_scope) 
 
-        python_cmd = sys.executable 
+        # USE GENERIC COMMAND for portability (Host vs Container)
+        python_cmd = "python3"
+        
+        # CALCULATE RELATIVE PATH for portability (Host vs Container)
+        # Result: .roo/burndown_server.py
+        try:
+            script_rel_path = self.dest_agent_script.relative_to(self.project_root)
+        except ValueError:
+            # Fallback if paths are on different drives (Windows edge case)
+            script_rel_path = self.dest_agent_script
+
+        script_arg = str(script_rel_path)
+        if os.name == 'nt':
+            script_arg = script_arg.replace("\\", "/") # Force forward slashes for JSON config
 
         self.config_data["mcpServers"] = {
             "github": {
@@ -150,8 +163,7 @@ class BurndownSetup:
             },
             "burndown-manager": {
                 "command": python_cmd,
-                # Pointing to the INSTALLED script in .roo/
-                "args": [str(self.dest_agent_script)], 
+                "args": [script_arg], # Now uses relative path
                 "env": {
                     "AZURE_DEVOPS_SCOPE": ado_scope,
                     "AZURE_DEVOPS_EXT_PAT": ado_token,
@@ -163,7 +175,115 @@ class BurndownSetup:
             }
         }
 
-    # --- 4. DEVCONTAINER AUTOMATION ---
+    # --- 4. LAUNCH SCRIPT (DETERMINISTIC COMPLIANCE) ---
+    def create_launch_script(self):
+        """Creates a script to launch VS Code with the enforced Profile."""
+        profile_name = self.collected_secrets.get("ROO_CODE_PROFILE_NAME", "default")
+        
+        print(f"\n--- Creating Safe Launch Script ({profile_name}) ---")
+        
+        is_windows = os.name == 'nt'
+        script_name = "start_agent.bat" if is_windows else "start_agent.sh"
+        script_path = self.project_root / script_name
+        
+        if is_windows:
+            content = f'@echo off\ncode . --profile "{profile_name}"\n'
+        else:
+            content = f'#!/bin/sh\n# Launches VS Code with the enforced profile\ncode . --profile "{profile_name}"\n'
+
+        try:
+            with open(script_path, "w") as f:
+                f.write(content)
+            
+            if not is_windows:
+                st = os.stat(script_path)
+                os.chmod(script_path, st.st_mode | stat.S_IEXEC)
+                
+            print(f"✅ Created {script_name}")
+            print(f"👉 Use './{script_name}' to open this project. This ENFORCES the correct profile.")
+            
+            self._update_gitignore(script_name)
+            
+        except Exception as e:
+            print(f"❌ Error creating launch script: {e}")
+
+    # --- 5. VS CODE AUTO-RUN TASK (ZERO DEPENDENCY CHECK) ---
+    def create_vscode_task(self):
+        """Creates a dedicated check script and a task to run it using ZERO dependencies."""
+        print(f"\n--- Creating VS Code Auto-Run Task ---")
+        vscode_dir = self.project_root / ".vscode"
+        tasks_file = vscode_dir / "tasks.json"
+        
+        checker_script_path = self.settings_dir / "check_profile.py"
+        
+        # Zero Dependency Script (Uses only standard library)
+        checker_content = """import os
+from pathlib import Path
+
+# Manual .env parser to avoid dependency issues in VS Code Task Runner
+def load_env(path):
+    if not path.exists(): return
+    with open(path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line: continue
+            k, v = line.split('=', 1)
+            v = v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ[k.strip()] = v
+
+# Load .env from project root (parent of .roo)
+root = Path(__file__).parent.parent
+env_path = root / ".env"
+load_env(env_path)
+
+profile = os.getenv("ROO_CODE_PROFILE_NAME", "default")
+print(f"\\n🛡️  PROJECT POLICY REMINDER")
+print(f"   Required Profile: {profile}")
+print(f"   (Please verify manually in Settings > Profiles)\\n")
+"""
+        try:
+            with open(checker_script_path, "w") as f:
+                f.write(checker_content)
+            
+            vscode_dir.mkdir(exist_ok=True)
+            
+            relative_script_path = os.path.join(".roo", "check_profile.py")
+            if os.name == 'nt':
+                relative_script_path = relative_script_path.replace("\\", "/")
+
+            # Use generic python3
+            task_content = {
+                "version": "2.0.0",
+                "tasks": [
+                    {
+                        "label": "Check RooCode Profile",
+                        "type": "shell",
+                        "command": "python3",
+                        "args": [relative_script_path],
+                        "presentation": {
+                            "reveal": "always",
+                            "panel": "new",
+                            "focus": False
+                        },
+                        "runOptions": {
+                            "runOn": "folderOpen"
+                        },
+                        "problemMatcher": []
+                    }
+                ]
+            }
+            
+            with open(tasks_file, "w") as f:
+                json.dump(task_content, f, indent=4)
+            
+            print(f"✅ Created .vscode/tasks.json")
+            
+        except Exception as e:
+            print(f"❌ Error creating VS Code Task: {e}")
+
+    # --- 6. DEVCONTAINER AUTOMATION ---
     def inject_devcontainer_config(self):
         print("\n--- Checking DevContainer Configuration ---")
         
@@ -181,7 +301,9 @@ class BurndownSetup:
                 raw_content = f.read()
 
             pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
-            def replacer(match): return match.group(1) if match.group(1) else ""
+            def replacer(match):
+                return match.group(1) if match.group(1) else ""
+            
             json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
             data = json.loads(json_content)
             modified = False
@@ -192,49 +314,23 @@ class BurndownSetup:
             extensions = vscode_cust.setdefault("extensions", [])
             if ROO_EXTENSION_ID not in extensions:
                 extensions.append(ROO_EXTENSION_ID)
+                print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
                 modified = True
 
             # B. Persistence Mount
             mounts = data.setdefault("mounts", [])
             target_mount = "/home/vscode/.vscode-server/data"
             mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
+            
             if not any("vscode-server-data" in m for m in mounts):
                 mounts.append(mount_str)
+                print(f"✅ Injected persistence mount.")
                 modified = True
 
             # C. Python
             is_alpine = "alpine" in raw_content.lower()
+            if not is_alpine: pass 
 
-            if not is_alpine:
-                # Check referenced Docker Compose files
-                compose_files = data.get("dockerComposeFile")
-                if compose_files:
-                    if isinstance(compose_files, str): compose_files = [compose_files]
-                    for cf_name in compose_files:
-                        cf_path = dc_path.parent / cf_name
-                        if cf_path.exists():
-                            try:
-                                with open(cf_path, "r") as cf:
-                                    if "alpine" in cf.read().lower():
-                                        is_alpine = True
-                                        print(f"🔍 Detected Alpine in {cf_name}")
-                                        break
-                            except: pass
-            
-            if not is_alpine:
-                # Check referenced Dockerfile
-                build = data.get("build")
-                if isinstance(build, dict) and "dockerfile" in build:
-                    df_path = dc_path.parent / build["dockerfile"]
-                    if df_path.exists():
-                        try:
-                            with open(df_path, "r") as df:
-                                if "alpine" in df.read().lower():
-                                    is_alpine = True
-                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
-                        except: pass
-
-            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 py3-pip"
             else:
@@ -251,7 +347,11 @@ class BurndownSetup:
             if updates:
                 joiner = " && "
                 new_commands = joiner.join(updates)
-                data["postCreateCommand"] = new_commands + joiner + current_cmd if current_cmd else new_commands
+                if current_cmd:
+                    data["postCreateCommand"] = new_commands + joiner + current_cmd
+                else:
+                    data["postCreateCommand"] = new_commands
+                print(f"✅ Injected Python & Dependencies install command.")
                 modified = True
 
             if modified:
@@ -259,12 +359,12 @@ class BurndownSetup:
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
                     f.write('\n')
-                print("✅ devcontainer.json updated.")
+                print("✅ devcontainer.json updated successfully.")
             else:
-                print("✅ devcontainer.json is up to date.")
+                print("✅ devcontainer.json is already up to date.")
 
         except Exception as e:
-            print(f"❌ Error updating devcontainer.json: {e}")
+            print(f"❌ Could not automatically update devcontainer.json: {e}")
 
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
@@ -284,10 +384,10 @@ class BurndownSetup:
             existing["mcpServers"].update(self.config_data["mcpServers"])
             
             with open(self.settings_file, "w") as f: json.dump(existing, f, indent=2)
-            print("✅ Updated existing config")
+            print("✅ Updated existing config at {self.settings_file}")
         else:
             with open(self.settings_file, "w") as f: json.dump(self.config_data, f, indent=2)
-            print("✅ Created new config")
+            print(f"✅ Created new config at {self.settings_file}")
 
         self._update_gitignore(".roo/")
         self._save_secrets_to_env()
@@ -323,7 +423,7 @@ class BurndownSetup:
                 for line in new_lines:
                     f.write(f"{line}\n")
             
-            print(f"✅ Saved new secrets to .env")
+            print(f"✅ Saved new secrets to {self.env_file_path} (Appended)")
             self._update_gitignore(".env")
         except Exception as e: print(f"❌ Error saving .env: {e}")
 
@@ -346,11 +446,13 @@ class BurndownSetup:
         self.install_agent_script() 
         self.configure_servers()
         self.save_configuration()
+        self.create_launch_script() 
+        self.create_vscode_task() 
         
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("👉 The Burndown Manager is installed.")
+        print("👉 Use './start_agent.sh' to launch.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
