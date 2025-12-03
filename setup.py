@@ -25,12 +25,10 @@ class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
         
-        # 1. Parse Command Line Arguments
         parser = argparse.ArgumentParser(description="Configure RooCode MCP Servers for a target project.")
         parser.add_argument("--target", type=str, help="Path to the target project directory (default: current directory)")
         args = parser.parse_args()
 
-        # 2. Determine Project Root
         if args.target:
             self.project_root = Path(args.target).resolve()
             if not self.project_root.exists():
@@ -41,21 +39,17 @@ class BurndownSetup:
             self.project_root = Path.cwd()
 
         self.env_file_path = self.project_root / ".env"
-        
-        # TARGET: Project-specific setting (.roo/mcp.json)
         self.settings_dir = self.project_root / ".roo" 
         self.settings_file = self.settings_dir / "mcp.json"
+        
+        self.script_dir = Path(__file__).parent.resolve()
+        self.burndown_script = self.script_dir / "burndown_server.py"
 
         self.collected_secrets = {}
-        # Try loading env from target first (to update existing)
         self._load_env_file()
-
-    def _verify_node_exists(self):
-        pass 
 
     def _load_env_file(self):
         if not self.env_file_path.exists(): return
-        print(f"ℹ️  Loading environment variables from {self.env_file_path}")
         try:
             with open(self.env_file_path, "r") as f:
                 for line in f:
@@ -78,24 +72,33 @@ class BurndownSetup:
             self.collected_secrets[env_var] = val
             return val
         except KeyboardInterrupt:
-            print("\nSetup cancelled.")
             sys.exit(0)
 
+    # --- SIMPLIFIED: Profile Policy ---
+    def configure_profile(self):
+        print("\n--- Project Configuration Profile ---")
+        print("ℹ️  RooCode uses Configuration Profiles (Settings > Profiles) to manage API keys and Models.")
+        print("    We will save the required Profile Name here so you know which one to select.")
+        
+        profile = os.getenv("ROO_CODE_PROFILE_NAME")
+        if not profile:
+            print("   What is the name of the RooCode Profile for this project?")
+            print("   (e.g. 'Work', 'Personal', 'Azure-Project')")
+            profile = input("   Profile Name: ").strip()
+            if not profile: profile = "Default"
+            self.collected_secrets["ROO_CODE_PROFILE_NAME"] = profile
+
     def configure_servers(self):
-        print("\n--- Configuring GitHub MCP ---")
+        print("\n--- Configuring MCP Access ---")
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
-        print("\n--- Configuring Azure DevOps MCP ---")
-        print("ℹ️  Tip: Enter the Organization Name (e.g. 'ExampleOrg') for global access,")
-        print("    OR the Project URL (e.g. 'https://dev.azure.com/ExampleOrg/Project') to constrain scope.")
-        
-        # UPDATED: Ask for "Scope" instead of just Org
         ado_scope = self.get_user_input("Azure DevOps Scope (Org Name or Project URL)", "AZURE_DEVOPS_SCOPE")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
 
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
-        # Pass the scope (Org Name OR Project URL) as the argument
         ado_args.append(ado_scope) 
+
+        python_cmd = sys.executable 
 
         self.config_data["mcpServers"] = {
             "github": {
@@ -111,8 +114,47 @@ class BurndownSetup:
                 "env": { "AZURE_DEVOPS_EXT_PAT": ado_token },
                 "disabled": False,
                 "autoApprove": []
+            },
+            "burndown-manager": {
+                "command": python_cmd,
+                "args": [str(self.burndown_script)],
+                "env": {
+                    "AZURE_DEVOPS_SCOPE": ado_scope,
+                    "AZURE_DEVOPS_EXT_PAT": ado_token,
+                    "AZURE_DEVOPS_ORG_URL": ado_scope
+                },
+                "disabled": False,
+                "autoApprove": []
             }
         }
+
+    def create_project_rules(self):
+        """Creates .clinerules with Profile Reminder (Phase 1: Compliance Only)."""
+        rules_path = self.project_root / ".clinerules"
+        
+        profile_name = self.collected_secrets.get("ROO_CODE_PROFILE_NAME", "Unknown")
+
+        # Simplified "Compliance Only" instruction set
+        content = f"""# 🛡️ PROJECT CONFIGURATION
+**REQUIRED PROFILE:** {profile_name}
+
+## ⚠️ AGENT INSTRUCTION
+Before processing any request, you must verify your active configuration:
+
+1. Check if the active RooCode Configuration Profile is set to **"{profile_name}"**.
+2. If it is NOT **"{profile_name}"**:
+   - STOP immediately.
+   - Reply: "⚠️ **WRONG PROFILE DETECTED** ⚠️\\nThis project requires the '{profile_name}' profile.\\nPlease switch profiles in settings."
+3. If it IS **"{profile_name}"**:
+   - Confirm readiness: "✅ Profile '{profile_name}' active. Ready for instructions."
+   - Wait for further user commands.
+"""
+        try:
+            with open(rules_path, "w") as f:
+                f.write(content)
+            print(f"✅ Created .clinerules (Requires Profile: {profile_name}).")
+        except Exception as e:
+            print(f"❌ Error creating .clinerules: {e}")
 
     # --- DEVCONTAINER AUTOMATION ---
     def inject_devcontainer_config(self):
@@ -131,7 +173,6 @@ class BurndownSetup:
             with open(dc_path, "r") as f:
                 raw_content = f.read()
 
-            # SAFE COMMENT STRIPPING
             pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
             def replacer(match):
                 return match.group(1) if match.group(1) else ""
@@ -144,80 +185,50 @@ class BurndownSetup:
             customizations = data.setdefault("customizations", {})
             vscode_cust = customizations.setdefault("vscode", {})
             extensions = vscode_cust.setdefault("extensions", [])
-            
             if ROO_EXTENSION_ID not in extensions:
                 extensions.append(ROO_EXTENSION_ID)
                 print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
                 modified = True
-            else:
-                print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
 
-            # 2. Inject Python Command (ONLY Python, no curl/install.sh)
-            # Improved Heuristic: Check referenced files
-            is_alpine = "alpine" in raw_content.lower()
-
-            if not is_alpine:
-                # Check referenced Docker Compose files
-                compose_files = data.get("dockerComposeFile")
-                if compose_files:
-                    if isinstance(compose_files, str): compose_files = [compose_files]
-                    for cf_name in compose_files:
-                        cf_path = dc_path.parent / cf_name
-                        if cf_path.exists():
-                            try:
-                                with open(cf_path, "r") as cf:
-                                    if "alpine" in cf.read().lower():
-                                        is_alpine = True
-                                        print(f"🔍 Detected Alpine in {cf_name}")
-                                        break
-                            except: pass
+            # 2. Inject Persistence Mount (CRITICAL FOR SAVING PROFILE SELECTION)
+            mounts = data.setdefault("mounts", [])
+            target_mount = "/home/vscode/.vscode-server/data"
+            mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
             
-            if not is_alpine:
-                # Check referenced Dockerfile
-                build = data.get("build")
-                if isinstance(build, dict) and "dockerfile" in build:
-                    df_path = dc_path.parent / build["dockerfile"]
-                    if df_path.exists():
-                        try:
-                            with open(df_path, "r") as df:
-                                if "alpine" in df.read().lower():
-                                    is_alpine = True
-                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
-                        except: pass
+            if not any("vscode-server-data" in m for m in mounts):
+                mounts.append(mount_str)
+                print(f"✅ Injected persistence mount (Saves Profile Selection).")
+                modified = True
 
-            # The exact commands we verified work:
+            # 3. Inject Python Command
+            is_alpine = "alpine" in raw_content.lower()
+            if not is_alpine: pass 
+
             if is_alpine:
-                install_cmd = "apk add --no-cache python3 && echo 'Python installed successfully'"
+                install_cmd = "apk add --no-cache python3 curl"
             else:
-                install_cmd = "apt-get update && apt-get install -y python3 && echo 'Python installed successfully'"
+                install_cmd = "apt-get update && apt-get install -y python3 curl"
 
             current_cmd = data.get("postCreateCommand", "")
-            
-            # Check if python is already being installed
             if "python3" not in current_cmd:
                 if current_cmd:
-                    # Prepend updates to existing command so python is available for subsequent commands
                     data["postCreateCommand"] = install_cmd + " && " + current_cmd
                 else:
                     data["postCreateCommand"] = install_cmd
-                
-                print(f"✅ Injected Python install command ({'Alpine' if is_alpine else 'Debian/Ubuntu'}).")
+                print(f"✅ Injected Python install command.")
                 modified = True
-            else:
-                print("ℹ️  Python install command already present.")
 
             if modified:
                 print("⚠️  Updating devcontainer.json (Comments will be removed)...")
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
-                    f.write('\n') # Fixes the missing newline issue
+                    f.write('\n')
                 print("✅ devcontainer.json updated successfully.")
             else:
                 print("✅ devcontainer.json is already up to date.")
 
         except Exception as e:
             print(f"❌ Could not automatically update devcontainer.json: {e}")
-            print("   Please manually add 'rooveterinaryinc.roo-cline' to extensions.")
 
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
@@ -228,7 +239,6 @@ class BurndownSetup:
             return
 
         if self.settings_file.exists():
-            print(f"✅ Found existing configuration at: {self.settings_file}")
             try:
                 with open(self.settings_file, "r") as f:
                     existing = json.load(f)
@@ -238,10 +248,10 @@ class BurndownSetup:
             existing["mcpServers"].update(self.config_data["mcpServers"])
             
             with open(self.settings_file, "w") as f: json.dump(existing, f, indent=2)
-            print("✅ Configuration updated.")
+            print("✅ Updated existing config at {self.settings_file}")
         else:
             with open(self.settings_file, "w") as f: json.dump(self.config_data, f, indent=2)
-            print(f"✅ Created new configuration file at: {self.settings_file}")
+            print(f"✅ Created new config at {self.settings_file}")
 
         self._update_gitignore(".roo/")
         self._save_secrets_to_env()
@@ -283,14 +293,14 @@ class BurndownSetup:
 
     def run(self):
         print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
-        self.configure_servers()
+        self.configure_profile() # Step 1: Policy Name
+        self.configure_servers() # Step 2: Keys & Tools
         self.save_configuration()
-        
-        # Inject Python and Extensions for the future Orchestrator
+        self.create_project_rules()
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("ℹ️  Please Rebuild Container to apply devcontainer.json changes.")
+        print("ℹ️  Guardrails Active: Agent will verify Profile selection.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
