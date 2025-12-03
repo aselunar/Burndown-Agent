@@ -114,10 +114,20 @@ class BurndownSetup:
             with open(dc_path, "r") as f:
                 raw_content = f.read()
 
-            # 2. Strip comments (C-style // and /* */) so json.loads works
-            # Note: This means we will lose comments when saving back.
-            json_content = re.sub(r'//.*', '', raw_content)
-            json_content = re.sub(r'/\*.*?\*/', '', json_content, flags=re.DOTALL)
+            # 2. Smartly Strip comments while preserving strings
+            # This regex matches:
+            # Group 1: Strings (e.g. "packages/**/dist")
+            # Group 2: Line comments (// ...)
+            # Group 3: Block comments (/* ... */)
+            # We keep Group 1, and discard Groups 2 and 3.
+            pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
+            
+            def replacer(match):
+                if match.group(1):
+                    return match.group(1) # It's a string, keep it
+                return "" # It's a comment, delete it
+
+            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
             
             data = json.loads(json_content)
             modified = False
@@ -172,6 +182,7 @@ class BurndownSetup:
                 print("⚠️  Updating devcontainer.json (Comments will be removed)...")
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
+                    f.write('\n') # Explicitly add newline at EOF
                 print("✅ devcontainer.json updated successfully.")
             else:
                 print("✅ devcontainer.json is already up to date.")
