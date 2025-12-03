@@ -22,19 +22,21 @@ MCP_SERVERS = {
 }
 
 ROO_EXTENSION_ID = "rooveterinaryinc.roo-cline"
-INSTALLER_URL = "http://host.docker.internal:8000/install.sh" # In production, use your GitHub Raw URL
+# In production, replace this with your GitHub Raw URL
+INSTALLER_URL = "http://host.docker.internal:8000/install.sh" 
 
 class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
         self.project_root = Path.cwd()
         self.env_file_path = self.project_root / ".env"
+        
         self.settings_dir = self.project_root / ".roo" 
         self.settings_file = self.settings_dir / "mcp.json"
+
         self.collected_secrets = {}
         self._load_env_file()
 
-    # ... [Existing _verify_node_exists, _load_env_file, get_user_input methods remain the same] ...
     def _verify_node_exists(self):
         if not shutil.which("npx"):
             print("❌ Error: 'npx' is not found in your PATH.")
@@ -69,13 +71,14 @@ class BurndownSetup:
             print("\nSetup cancelled.")
             sys.exit(0)
 
-    # ... [Existing configure_servers method remains the same] ...
     def configure_servers(self):
         print("\n--- Configuring GitHub MCP ---")
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
+        
         print("\n--- Configuring Azure DevOps MCP ---")
         ado_org = self.get_user_input("Azure DevOps Organization Name", "AZURE_DEVOPS_ORG")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
+
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_org) 
 
@@ -96,11 +99,10 @@ class BurndownSetup:
             }
         }
 
-    # --- NEW: DevContainer Automation Logic ---
+    # --- DEVCONTAINER AUTOMATION ---
     def inject_devcontainer_config(self):
         print("\n--- Checking DevContainer Configuration ---")
         
-        # 1. Find the file
         dc_path = self.project_root / ".devcontainer" / "devcontainer.json"
         if not dc_path.exists():
             dc_path = self.project_root / "devcontainer.json"
@@ -114,25 +116,17 @@ class BurndownSetup:
             with open(dc_path, "r") as f:
                 raw_content = f.read()
 
-            # 2. Smartly Strip comments while preserving strings
-            # This regex matches:
-            # Group 1: Strings (e.g. "packages/**/dist")
-            # Group 2: Line comments (// ...)
-            # Group 3: Block comments (/* ... */)
-            # We keep Group 1, and discard Groups 2 and 3.
+            # SAFE COMMENT STRIPPING
+            # Matches strings OR comments. If string, keep it. If comment, delete it.
             pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
-            
             def replacer(match):
-                if match.group(1):
-                    return match.group(1) # It's a string, keep it
-                return "" # It's a comment, delete it
-
-            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
+                return match.group(1) if match.group(1) else ""
             
+            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
             data = json.loads(json_content)
             modified = False
 
-            # 3. Inject Extension
+            # 1. Inject Extension
             customizations = data.setdefault("customizations", {})
             vscode_cust = customizations.setdefault("vscode", {})
             extensions = vscode_cust.setdefault("extensions", [])
@@ -144,45 +138,41 @@ class BurndownSetup:
             else:
                 print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
 
-            # 4. Construct Commands
+            # 2. Inject Command
             # Heuristic: Check raw content for "alpine" to guess distro
             is_alpine = "alpine" in raw_content.lower()
             
+            # The command we verified works
             if is_alpine:
-                install_py = "apk add --no-cache python3 curl" # Added curl just in case
+                install_cmd = "apk add --no-cache python3 curl"
             else:
-                install_py = "apt-get update && apt-get install -y python3 curl"
+                install_cmd = "apt-get update && apt-get install -y python3 curl"
 
-            # The automation command
             run_setup = f"curl -sL {INSTALLER_URL} | sh"
-
             current_cmd = data.get("postCreateCommand", "")
             
-            # 5. Inject Python Install (if missing)
+            # Helper to append if not present
+            cmd_updates = []
             if "python3" not in current_cmd:
-                if current_cmd:
-                    current_cmd = f"{install_py} && {current_cmd}"
-                else:
-                    current_cmd = install_py
-                modified = True
-                print(f"✅ Injected Python install command ({'Alpine' if is_alpine else 'Debian/Ubuntu'}).")
-
-            # 6. Inject Setup Script (if missing)
+                cmd_updates.append(install_cmd)
             if "install.sh" not in current_cmd:
+                cmd_updates.append(run_setup)
+            
+            if cmd_updates:
                 if current_cmd:
-                    current_cmd = f"{current_cmd} && {run_setup}"
+                    # Prepend updates to existing command
+                    data["postCreateCommand"] = " && ".join(cmd_updates) + " && " + current_cmd
                 else:
-                    current_cmd = run_setup
+                    data["postCreateCommand"] = " && ".join(cmd_updates)
+                
+                print(f"✅ Updated postCreateCommand with: {' && '.join(cmd_updates)}")
                 modified = True
-                print("✅ Injected Bootstrapper command.")
-
-            data["postCreateCommand"] = current_cmd
 
             if modified:
                 print("⚠️  Updating devcontainer.json (Comments will be removed)...")
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
-                    f.write('\n') # Explicitly add newline at EOF
+                    f.write('\n') # Fixes the missing newline issue
                 print("✅ devcontainer.json updated successfully.")
             else:
                 print("✅ devcontainer.json is already up to date.")
@@ -191,7 +181,6 @@ class BurndownSetup:
             print(f"❌ Could not automatically update devcontainer.json: {e}")
             print("   Please manually add 'rooveterinaryinc.roo-cline' to extensions.")
 
-    # ... [Existing save_configuration, _save_secrets, _update_gitignore methods remain the same] ...
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
         try:
@@ -260,7 +249,7 @@ class BurndownSetup:
         self.configure_servers()
         self.save_configuration()
         
-        # New Step: Update the Dev Container definition
+        # Inject the working configuration automatically
         self.inject_devcontainer_config()
         
         print("\n🎉 Setup Complete. Restart RooCode to apply.")
