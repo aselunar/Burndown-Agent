@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import shutil
 import argparse
 import re
 from pathlib import Path
@@ -83,9 +84,10 @@ class BurndownSetup:
         profile = os.getenv("ROO_CODE_PROFILE_NAME")
         if not profile:
             print("   What is the name of the RooCode Profile for this project?")
-            print("   (e.g. 'Work', 'Personal', 'Azure-Project')")
-            profile = input("   Profile Name: ").strip()
-            if not profile: profile = "Default"
+            print("   (e.g. 'default', 'Work', 'Personal')")
+            # CHANGED: Default is now lowercase 'default' to match standard internal naming
+            profile = input("   Profile Name [default]: ").strip()
+            if not profile: profile = "default"
             self.collected_secrets["ROO_CODE_PROFILE_NAME"] = profile
 
     def configure_servers(self):
@@ -251,7 +253,7 @@ Before processing any request, you must verify your active configuration:
             print("✅ Updated existing config at {self.settings_file}")
         else:
             with open(self.settings_file, "w") as f: json.dump(self.config_data, f, indent=2)
-            print(f"✅ Created new config at {self.settings_file}")
+            print(f"✅ Created new configuration file at: {self.settings_file}")
 
         self._update_gitignore(".roo/")
         self._save_secrets_to_env()
