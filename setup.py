@@ -295,8 +295,8 @@ class BurndownSetup:
                         except: pass
 
             if is_alpine:
-                install_cmd = "apk add --no-cache python3 py3-pip"
-                pip_cmd = "python3 -m venv .roo/venv && .roo/venv/bin/python -m pip install -r .roo/requirements.txt"
+                install_cmd = "apk add --no-cache python3 py3-pip py3-virtualenv"
+                pip_cmd = "virtualenv .roo/venv && .roo/venv/bin/pip install -r .roo/requirements.txt"
             else:
                 install_cmd = "apt-get update && apt-get install -y python3 python3-pip python3-venv"
                 pip_cmd = "python3 -m venv .roo/venv && .roo/venv/bin/pip install -r .roo/requirements.txt"
