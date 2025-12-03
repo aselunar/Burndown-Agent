@@ -129,7 +129,6 @@ class BurndownSetup:
                 raw_content = f.read()
 
             # SAFE COMMENT STRIPPING
-            # Matches strings OR comments. If string, keep it. If comment, delete it.
             pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
             def replacer(match):
                 return match.group(1) if match.group(1) else ""
@@ -150,14 +149,14 @@ class BurndownSetup:
             else:
                 print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
 
-            # 2. Inject Python Command (The working one)
+            # 2. Inject Python Command (ONLY Python, no curl/install.sh)
             is_alpine = "alpine" in raw_content.lower()
             
             # The exact commands we verified work:
             if is_alpine:
-                install_cmd = "apk add --no-cache python3 curl"
+                install_cmd = "apk add --no-cache python3 && echo 'Python installed successfully'"
             else:
-                install_cmd = "apt-get update && apt-get install -y python3 curl"
+                install_cmd = "apt-get update && apt-get install -y python3 && echo 'Python installed successfully'"
 
             current_cmd = data.get("postCreateCommand", "")
             
