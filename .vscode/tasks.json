@@ -6,8 +6,7 @@
             "type": "shell",
             "command": "python3",
             "args": [
-                "-c",
-                "import os; from dotenv import load_dotenv; load_dotenv(); print(f'\\n\ud83d\udee1\ufe0f  PROJECT POLICY CHECK\\n   Required Profile: {os.getenv(\"ROO_CODE_PROFILE_NAME\", \"Unknown\")}\\n   Please ensure this profile is selected in Settings > Profiles.\\n')"
+                ".roo/check_profile.py"
             ],
             "presentation": {
                 "reveal": "always",
