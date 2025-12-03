@@ -4,7 +4,7 @@
         {
             "label": "Check RooCode Profile",
             "type": "shell",
-            "command": "python3",
+            "command": "/opt/homebrew/opt/python@3.13/bin/python3.13",
             "args": [
                 ".roo/check_profile.py"
             ],
@@ -15,7 +15,8 @@
             },
             "runOptions": {
                 "runOn": "folderOpen"
-            }
+            },
+            "problemMatcher": []
         }
     ]
 }

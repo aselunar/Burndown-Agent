@@ -2,7 +2,6 @@ import json
 import os
 import sys
 import argparse
-import re
 import shutil
 from pathlib import Path
 
@@ -166,23 +165,35 @@ class BurndownSetup:
 
     # --- 4. AUTO-RUN TASK (FIXED ENVIRONMENT) ---
     def create_vscode_task(self):
-        """Creates a dedicated check script and a task to run it using the SETUP python environment."""
+        """Creates a dedicated check script and a task to run it using ZERO dependencies."""
         print(f"\n--- Creating VS Code Auto-Run Task ---")
         vscode_dir = self.project_root / ".vscode"
         tasks_file = vscode_dir / "tasks.json"
         
         checker_script_path = self.settings_dir / "check_profile.py"
         
-        # Standard, robust python script
+        # Zero Dependency Script (Uses only os and pathlib)
         checker_content = """import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+# Simple .env parser to avoid dependency issues in VS Code Task Runner
+def load_env(path):
+    if not path.exists(): return
+    with open(path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line: continue
+            k, v = line.split('=', 1)
+            v = v.strip()
+            # Basic unquoting
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ[k.strip()] = v
 
 # Load .env from project root (parent of .roo)
 root = Path(__file__).parent.parent
 env_path = root / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
+load_env(env_path)
 
 profile = os.getenv("ROO_CODE_PROFILE_NAME", "default")
 print(f"\\n🛡️  PROJECT POLICY CHECK")
@@ -199,18 +210,14 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
             if os.name == 'nt':
                 relative_script_path = relative_script_path.replace("\\", "/")
 
-            # CRITICAL FIX: Use sys.executable to capture the CURRENT (venv) python path
-            # This ensures the task runs with the same python that has 'dotenv' installed
-            task_python = sys.executable
-
+            # Use system python3 as it has os/pathlib built-in
             task_content = {
                 "version": "2.0.0",
                 "tasks": [
                     {
                         "label": "Check RooCode Profile",
                         "type": "shell",
-                        # Use the absolute path to the venv python
-                        "command": task_python, 
+                        "command": "python3", 
                         "args": [relative_script_path],
                         "presentation": {
                             "reveal": "always",
@@ -228,7 +235,7 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
             with open(tasks_file, "w") as f:
                 json.dump(task_content, f, indent=4)
             
-            print(f"✅ Created .vscode/tasks.json (Bound to: {task_python})")
+            print(f"✅ Created .vscode/tasks.json & .roo/check_profile.py")
             
         except Exception as e:
             print(f"❌ Error creating VS Code Task: {e}")
@@ -278,37 +285,8 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
 
             # C. Python
             is_alpine = "alpine" in raw_content.lower()
+            if not is_alpine: pass 
 
-            if not is_alpine:
-                # Check referenced Docker Compose files
-                compose_files = data.get("dockerComposeFile")
-                if compose_files:
-                    if isinstance(compose_files, str): compose_files = [compose_files]
-                    for cf_name in compose_files:
-                        cf_path = dc_path.parent / cf_name
-                        if cf_path.exists():
-                            try:
-                                with open(cf_path, "r") as cf:
-                                    if "alpine" in cf.read().lower():
-                                        is_alpine = True
-                                        print(f"🔍 Detected Alpine in {cf_name}")
-                                        break
-                            except: pass
-            
-            if not is_alpine:
-                # Check referenced Dockerfile
-                build = data.get("build")
-                if isinstance(build, dict) and "dockerfile" in build:
-                    df_path = dc_path.parent / build["dockerfile"]
-                    if df_path.exists():
-                        try:
-                            with open(df_path, "r") as df:
-                                if "alpine" in df.read().lower():
-                                    is_alpine = True
-                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
-                        except: pass
-
-            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 py3-pip"
             else:
@@ -425,7 +403,7 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
         self.install_agent_script() 
         self.configure_servers()
         self.save_configuration()
-        self.create_vscode_task() # FIXED: Now uses specific python path
+        self.create_vscode_task() # FIXED: Now uses ZERO dependencies
         
         self.inject_devcontainer_config()
         
