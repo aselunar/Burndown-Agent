@@ -21,16 +21,13 @@ MCP_SERVERS = {
     }
 }
 
-ROO_EXTENSION_ID = "rooveterinaryinc.roo-cline"
-# In production, replace this with your GitHub Raw URL
-INSTALLER_URL = "http://host.docker.internal:8000/install.sh" 
-
 class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
         self.project_root = Path.cwd()
         self.env_file_path = self.project_root / ".env"
         
+        # TARGET: Project-specific setting (.roo/mcp.json)
         self.settings_dir = self.project_root / ".roo" 
         self.settings_file = self.settings_dir / "mcp.json"
 
@@ -99,88 +96,6 @@ class BurndownSetup:
             }
         }
 
-    # --- DEVCONTAINER AUTOMATION ---
-    def inject_devcontainer_config(self):
-        print("\n--- Checking DevContainer Configuration ---")
-        
-        dc_path = self.project_root / ".devcontainer" / "devcontainer.json"
-        if not dc_path.exists():
-            dc_path = self.project_root / "devcontainer.json"
-            if not dc_path.exists():
-                print("ℹ️  No devcontainer.json found. Skipping injection.")
-                return
-
-        print(f"🔍 Found {dc_path.name}")
-        
-        try:
-            with open(dc_path, "r") as f:
-                raw_content = f.read()
-
-            # SAFE COMMENT STRIPPING
-            # Matches strings OR comments. If string, keep it. If comment, delete it.
-            pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
-            def replacer(match):
-                return match.group(1) if match.group(1) else ""
-            
-            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
-            data = json.loads(json_content)
-            modified = False
-
-            # 1. Inject Extension
-            customizations = data.setdefault("customizations", {})
-            vscode_cust = customizations.setdefault("vscode", {})
-            extensions = vscode_cust.setdefault("extensions", [])
-            
-            if ROO_EXTENSION_ID not in extensions:
-                extensions.append(ROO_EXTENSION_ID)
-                print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
-                modified = True
-            else:
-                print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
-
-            # 2. Inject Command
-            # Heuristic: Check raw content for "alpine" to guess distro
-            is_alpine = "alpine" in raw_content.lower()
-            
-            # The command we verified works
-            if is_alpine:
-                install_cmd = "apk add --no-cache python3 curl"
-            else:
-                install_cmd = "apt-get update && apt-get install -y python3 curl"
-
-            run_setup = f"curl -sL {INSTALLER_URL} | sh"
-            current_cmd = data.get("postCreateCommand", "")
-            
-            # Helper to append if not present
-            cmd_updates = []
-            if "python3" not in current_cmd:
-                cmd_updates.append(install_cmd)
-            if "install.sh" not in current_cmd:
-                cmd_updates.append(run_setup)
-            
-            if cmd_updates:
-                if current_cmd:
-                    # Prepend updates to existing command
-                    data["postCreateCommand"] = " && ".join(cmd_updates) + " && " + current_cmd
-                else:
-                    data["postCreateCommand"] = " && ".join(cmd_updates)
-                
-                print(f"✅ Updated postCreateCommand with: {' && '.join(cmd_updates)}")
-                modified = True
-
-            if modified:
-                print("⚠️  Updating devcontainer.json (Comments will be removed)...")
-                with open(dc_path, "w") as f:
-                    json.dump(data, f, indent=2)
-                    f.write('\n') # Fixes the missing newline issue
-                print("✅ devcontainer.json updated successfully.")
-            else:
-                print("✅ devcontainer.json is already up to date.")
-
-        except Exception as e:
-            print(f"❌ Could not automatically update devcontainer.json: {e}")
-            print("   Please manually add 'rooveterinaryinc.roo-cline' to extensions.")
-
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
         try:
@@ -248,12 +163,7 @@ class BurndownSetup:
         self._verify_node_exists()
         self.configure_servers()
         self.save_configuration()
-        
-        # Inject the working configuration automatically
-        self.inject_devcontainer_config()
-        
         print("\n🎉 Setup Complete. Restart RooCode to apply.")
-        print("ℹ️  If you updated devcontainer.json, please Rebuild Container.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
