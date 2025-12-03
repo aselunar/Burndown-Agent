@@ -51,7 +51,6 @@ class BurndownSetup:
         self._load_env_file()
 
     def _verify_node_exists(self):
-        # Only relevant for local execution, not strictly needed for config generation
         pass 
 
     def _load_env_file(self):
@@ -87,11 +86,16 @@ class BurndownSetup:
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
         print("\n--- Configuring Azure DevOps MCP ---")
-        ado_org = self.get_user_input("Azure DevOps Organization Name", "AZURE_DEVOPS_ORG")
+        print("ℹ️  Tip: Enter the Organization Name (e.g. 'ExampleOrg') for global access,")
+        print("    OR the Project URL (e.g. 'https://dev.azure.com/ExampleOrg/Project') to constrain scope.")
+        
+        # UPDATED: Ask for "Scope" instead of just Org
+        ado_scope = self.get_user_input("Azure DevOps Scope (Org Name or Project URL)", "AZURE_DEVOPS_SCOPE")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
 
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
-        ado_args.append(ado_org) 
+        # Pass the scope (Org Name OR Project URL) as the argument
+        ado_args.append(ado_scope) 
 
         self.config_data["mcpServers"] = {
             "github": {
