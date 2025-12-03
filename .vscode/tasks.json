@@ -4,7 +4,7 @@
         {
             "label": "Check RooCode Profile",
             "type": "shell",
-            "command": "/opt/homebrew/opt/python@3.13/bin/python3.13",
+            "command": "python3",
             "args": [
                 ".roo/check_profile.py"
             ],
