@@ -3,6 +3,8 @@ import os
 import sys
 import argparse
 import re
+import stat
+import shutil
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -42,8 +44,12 @@ class BurndownSetup:
         self.settings_dir = self.project_root / ".roo" 
         self.settings_file = self.settings_dir / "mcp.json"
         
-        self.script_dir = Path(__file__).parent.resolve()
-        self.burndown_script = self.script_dir / "burndown_server.py"
+        # Source path (Where this setup.py lives)
+        self.source_dir = Path(__file__).parent.resolve()
+        self.source_agent_script = self.source_dir / "burndown_agent.py"
+        
+        # Destination path (Inside the target project)
+        self.dest_agent_script = self.settings_dir / "burndown_agent.py"
 
         self.collected_secrets = {}
         self._load_env_file()
@@ -78,7 +84,6 @@ class BurndownSetup:
     def configure_profile(self):
         print("\n--- Project Configuration Profile ---")
         print("ℹ️  RooCode uses Configuration Profiles (Settings > Profiles) to manage API keys and Models.")
-        print("    We will save the required Profile Name here so you know which one to select.")
         
         profile = os.getenv("ROO_CODE_PROFILE_NAME")
         if not profile:
@@ -92,20 +97,35 @@ class BurndownSetup:
                 profile = profile_in
             self.collected_secrets["ROO_CODE_PROFILE_NAME"] = profile
 
+    # --- 2. INSTALL AGENT SCRIPT ---
+    def install_agent_script(self):
+        """Copies the agent script into the target project's .roo folder."""
+        print("\n--- Installing Burndown Agent ---")
+        if not self.source_agent_script.exists():
+            print(f"❌ Error: Source agent script not found at {self.source_agent_script}")
+            sys.exit(1)
+            
+        try:
+            self.settings_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.source_agent_script, self.dest_agent_script)
+            print(f"✅ Installed agent to {self.dest_agent_script}")
+        except Exception as e:
+            print(f"❌ Error installing agent script: {e}")
+            sys.exit(1)
+
+    # --- 3. SERVER CONFIGURATION ---
     def configure_servers(self):
-        print("\n--- Configuring GitHub MCP ---")
+        print("\n--- Configuring MCP Access ---")
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
         print("\n--- Configuring Azure DevOps MCP ---")
         print("ℹ️  Tip: Enter the Organization Name (e.g. 'ExampleOrg') for global access,")
         print("    OR the Project URL (e.g. 'https://dev.azure.com/ExampleOrg/Project') to constrain scope.")
         
-        # UPDATED: Ask for "Scope" instead of just Org
         ado_scope = self.get_user_input("Azure DevOps Scope (Org Name or Project URL)", "AZURE_DEVOPS_SCOPE")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
 
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
-        # Pass the scope (Org Name OR Project URL) as the argument
         ado_args.append(ado_scope) 
 
         # We run the server using the python executable that ran this script
@@ -126,9 +146,9 @@ class BurndownSetup:
                 "disabled": False,
                 "autoApprove": []
             },
-            "burndown-manager": {
+            "burndown-agent": {
                 "command": python_cmd,
-                "args": [str(self.burndown_script)],
+                "args": [str(self.dest_agent_script)], # Points to the installed copy
                 "env": {
                     "AZURE_DEVOPS_SCOPE": ado_scope,
                     "AZURE_DEVOPS_EXT_PAT": ado_token,
@@ -156,7 +176,6 @@ class BurndownSetup:
             with open(dc_path, "r") as f:
                 raw_content = f.read()
 
-            # SAFE COMMENT STRIPPING
             pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
             def replacer(match):
                 return match.group(1) if match.group(1) else ""
@@ -177,7 +196,7 @@ class BurndownSetup:
             else:
                 print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
 
-            # 2. Inject Persistence Mount (CRITICAL FOR SAVING PROFILE SELECTION)
+            # 2. Inject Persistence Mount
             mounts = data.setdefault("mounts", [])
             target_mount = "/home/vscode/.vscode-server/data"
             mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
@@ -187,10 +206,8 @@ class BurndownSetup:
                 print(f"✅ Injected persistence mount (Saves Profile Selection).")
                 modified = True
 
-            # 3. Inject Python Command (ONLY Python, no curl/install.sh)
-            # Improved Heuristic: Check referenced files
+            # 3. Inject Python Command
             is_alpine = "alpine" in raw_content.lower()
-
             if not is_alpine:
                 # Check referenced Docker Compose files
                 compose_files = data.get("dockerComposeFile")
@@ -220,7 +237,6 @@ class BurndownSetup:
                                     print(f"🔍 Detected Alpine in {build['dockerfile']}")
                         except: pass
 
-            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 && echo 'Python installed successfully'"
             else:
@@ -228,10 +244,8 @@ class BurndownSetup:
 
             current_cmd = data.get("postCreateCommand", "")
             
-            # Check if python is already being installed
             if "python3" not in current_cmd:
                 if current_cmd:
-                    # Prepend updates to existing command so python is available for subsequent commands
                     data["postCreateCommand"] = install_cmd + " && " + current_cmd
                 else:
                     data["postCreateCommand"] = install_cmd
@@ -245,7 +259,7 @@ class BurndownSetup:
                 print("⚠️  Updating devcontainer.json (Comments will be removed)...")
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
-                    f.write('\n') # Fixes the missing newline issue
+                    f.write('\n')
                 print("✅ devcontainer.json updated successfully.")
             else:
                 print("✅ devcontainer.json is already up to date.")
@@ -285,12 +299,10 @@ class BurndownSetup:
         existing_keys = set()
         content = ""
         
-        # 1. Parse existing keys to avoid partial string match errors
         if self.env_file_path.exists():
             try:
                 with open(self.env_file_path, "r") as f:
                     content = f.read()
-                    
                 lines = content.splitlines()
                 for line in lines:
                     line = line.strip()
@@ -300,21 +312,17 @@ class BurndownSetup:
             except Exception as e:
                 print(f"⚠️  Could not read existing .env: {e}")
 
-        # 2. Determine what needs to be added
         new_lines = []
         for key, val in self.collected_secrets.items():
             if key not in existing_keys:
                 new_lines.append(f"{key}={val}")
         
-        if not new_lines:
-            return
+        if not new_lines: return
 
         print("\n--- Persistence Setup ---")
-        # 3. Append to file
         mode = "a" if self.env_file_path.exists() else "w"
         try:
             with open(self.env_file_path, mode) as f:
-                # Ensure we start on a new line if appending
                 if mode == "a" and content and not content.endswith("\n"):
                     f.write("\n")
                 for line in new_lines:
@@ -340,11 +348,10 @@ class BurndownSetup:
 
     def run(self):
         print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
-        self.configure_profile() # Step 1: Policy Name
-        self.configure_servers() # Step 2: Keys & Tools
+        self.configure_profile()
+        self.install_agent_script() # New step
+        self.configure_servers()
         self.save_configuration()
-        
-        # Inject Python and Extensions for the future Orchestrator
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
