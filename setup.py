@@ -115,6 +115,111 @@ class BurndownSetup:
             }
         }
 
+    # --- DEVCONTAINER AUTOMATION ---
+    def inject_devcontainer_config(self):
+        print("\n--- Checking DevContainer Configuration ---")
+        
+        dc_path = self.project_root / ".devcontainer" / "devcontainer.json"
+        if not dc_path.exists():
+            dc_path = self.project_root / "devcontainer.json"
+            if not dc_path.exists():
+                print("ℹ️  No devcontainer.json found. Skipping injection.")
+                return
+
+        print(f"🔍 Found {dc_path.name}")
+        
+        try:
+            with open(dc_path, "r") as f:
+                raw_content = f.read()
+
+            # SAFE COMMENT STRIPPING
+            pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
+            def replacer(match):
+                return match.group(1) if match.group(1) else ""
+            
+            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
+            data = json.loads(json_content)
+            modified = False
+
+            # 1. Inject Extension
+            customizations = data.setdefault("customizations", {})
+            vscode_cust = customizations.setdefault("vscode", {})
+            extensions = vscode_cust.setdefault("extensions", [])
+            
+            if ROO_EXTENSION_ID not in extensions:
+                extensions.append(ROO_EXTENSION_ID)
+                print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
+                modified = True
+            else:
+                print(f"ℹ️  {ROO_EXTENSION_ID} already present.")
+
+            # 2. Inject Python Command (ONLY Python, no curl/install.sh)
+            # Improved Heuristic: Check referenced files
+            is_alpine = "alpine" in raw_content.lower()
+
+            if not is_alpine:
+                # Check referenced Docker Compose files
+                compose_files = data.get("dockerComposeFile")
+                if compose_files:
+                    if isinstance(compose_files, str): compose_files = [compose_files]
+                    for cf_name in compose_files:
+                        cf_path = dc_path.parent / cf_name
+                        if cf_path.exists():
+                            try:
+                                with open(cf_path, "r") as cf:
+                                    if "alpine" in cf.read().lower():
+                                        is_alpine = True
+                                        print(f"🔍 Detected Alpine in {cf_name}")
+                                        break
+                            except: pass
+            
+            if not is_alpine:
+                # Check referenced Dockerfile
+                build = data.get("build")
+                if isinstance(build, dict) and "dockerfile" in build:
+                    df_path = dc_path.parent / build["dockerfile"]
+                    if df_path.exists():
+                        try:
+                            with open(df_path, "r") as df:
+                                if "alpine" in df.read().lower():
+                                    is_alpine = True
+                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
+                        except: pass
+
+            # The exact commands we verified work:
+            if is_alpine:
+                install_cmd = "apk add --no-cache python3 && echo 'Python installed successfully'"
+            else:
+                install_cmd = "apt-get update && apt-get install -y python3 && echo 'Python installed successfully'"
+
+            current_cmd = data.get("postCreateCommand", "")
+            
+            # Check if python is already being installed
+            if "python3" not in current_cmd:
+                if current_cmd:
+                    # Prepend updates to existing command so python is available for subsequent commands
+                    data["postCreateCommand"] = install_cmd + " && " + current_cmd
+                else:
+                    data["postCreateCommand"] = install_cmd
+                
+                print(f"✅ Injected Python install command ({'Alpine' if is_alpine else 'Debian/Ubuntu'}).")
+                modified = True
+            else:
+                print("ℹ️  Python install command already present.")
+
+            if modified:
+                print("⚠️  Updating devcontainer.json (Comments will be removed)...")
+                with open(dc_path, "w") as f:
+                    json.dump(data, f, indent=2)
+                    f.write('\n') # Fixes the missing newline issue
+                print("✅ devcontainer.json updated successfully.")
+            else:
+                print("✅ devcontainer.json is already up to date.")
+
+        except Exception as e:
+            print(f"❌ Could not automatically update devcontainer.json: {e}")
+            print("   Please manually add 'rooveterinaryinc.roo-cline' to extensions.")
+
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
         try:
@@ -181,6 +286,10 @@ class BurndownSetup:
         print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
         self.configure_servers()
         self.save_configuration()
+        
+        # Inject Python and Extensions for the future Orchestrator
+        self.inject_devcontainer_config()
+        
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
         print("ℹ️  Please Rebuild Container to apply devcontainer.json changes.")
 
