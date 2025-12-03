@@ -40,3 +40,36 @@ If you are installing the agent from the public repository, use this one-liner. 
 
 ```bash
 curl -sL https://raw.githubusercontent.com/aselunar/Burndown-Agent/main/install.sh | sh
+```
+
+### Option B: Development (Local)
+
+If you are developing this agent and want to test the bootstrapper locally without pushing to GitHub:
+
+Start the Local Server:
+In the Burndown-Agent root, run:
+
+```bash
+./local-server.bash
+```
+
+(This starts a Python server on port 8000)
+
+Run inside the Container:
+Inside your target Dev Container terminal with Python already installed, run:
+
+```bash
+# Run the bootstrapper pointing to your host machine
+curl -sL http://host.docker.internal:8000/install.sh | sh
+``` 
+
+
+🛠️ Development Workflow
+
+To test changes to setup.py or install.sh:
+
+Run ./local-server.bash in this repo.
+
+Changes to files are served immediately (no restart needed).
+
+From your test container, run the curl command (Option B) above.
