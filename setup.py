@@ -264,6 +264,7 @@ class BurndownSetup:
 
             # C. Python + Requirements
             is_alpine = "alpine" in raw_content.lower()
+
             if not is_alpine:
                 # Check referenced Docker Compose files
                 compose_files = data.get("dockerComposeFile")
@@ -309,16 +310,24 @@ class BurndownSetup:
             if "requirements.txt" not in current_cmd:
                 updates.append(pip_cmd)
 
-            if updates:
-                joiner = " && "
-                new_commands = joiner.join(updates)
-                
-                if current_cmd:
-                    data["postCreateCommand"] = new_commands + joiner + current_cmd
-                else:
-                    data["postCreateCommand"] = new_commands
-                
-                print(f"✅ Injected Python & Dependencies install command.")
+            commands = []
+
+            # 1. Python installation (if not present)
+            if "python3" not in current_cmd and "apk add" not in current_cmd and "apt-get" not in current_cmd:
+                commands.append(install_cmd)
+
+            # 2. Pip requirements (if not present)
+            if "requirements.txt" not in current_cmd:
+                commands.append(pip_cmd)
+
+            # 3. Existing command (if any and not empty)
+            if current_cmd and current_cmd.strip():
+                commands.append(current_cmd)
+
+            # Only update if we added something new
+            if len(commands) > (1 if current_cmd else 0):
+                data["postCreateCommand"] = " && ".join(commands)
+                print(f"✅ Updated postCreateCommand")
                 modified = True
 
             if modified:
