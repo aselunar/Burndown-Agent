@@ -2,10 +2,10 @@ import os
 import base64
 import requests
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+from mcp import FastMCP
 
 # Environment Setup
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(project_root, ".env")
 load_dotenv(env_path)
 
@@ -86,4 +86,4 @@ def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
         return f"❌ Error fetching tasks: {str(e)}"
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="stdio")
