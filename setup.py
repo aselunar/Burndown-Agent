@@ -87,8 +87,8 @@ class BurndownSetup:
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
         print("\n--- Configuring Azure DevOps MCP ---")
-        print("ℹ️  Tip: Enter the Organization Name (e.g. 'CropScience-1') for global access,")
-        print("    OR the Project URL (e.g. 'https://dev.azure.com/CropScience-1/Timetracker') to constrain scope.")
+        print("ℹ️  Tip: Enter the Organization Name (e.g. 'ExampleOrg') for global access,")
+        print("    OR the Project URL (e.g. 'https://dev.azure.com/ExampleOrg/Project') to constrain scope.")
         
         # UPDATED: Ask for "Scope" instead of just Org
         ado_scope = self.get_user_input("Azure DevOps Scope (Org Name or Project URL)", "AZURE_DEVOPS_SCOPE")
