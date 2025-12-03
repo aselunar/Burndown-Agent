@@ -84,7 +84,7 @@ class BurndownSetup:
     # --- 1. PROFILE CONFIGURATION ---
     def configure_profile(self):
         print("\n--- Project Configuration Profile ---")
-        print("ℹ️  We will save the required RooCode Profile Name to .env for reference.")
+        print("ℹ️  RooCode uses Configuration Profiles (Settings > Profiles) to manage API keys and Models.")
         
         profile = os.getenv("ROO_CODE_PROFILE_NAME")
         if not profile:
@@ -107,7 +107,7 @@ class BurndownSetup:
             print(f"❌ Error creating directory {self.settings_dir}: {e}")
             sys.exit(1)
 
-        # Copy the REAL server logic
+        # Copy the REAL server logic (burndown_server.py)
         if self.source_agent_script.exists():
             shutil.copy2(self.source_agent_script, self.dest_agent_script)
             print(f"✅ Installed logic to {self.dest_agent_script}")
@@ -131,12 +131,7 @@ class BurndownSetup:
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_scope) 
 
-        # FIX: Use "python3" generic command, and RELATIVE path for args.
-        # This ensures it works on both Host (Mac) and Container (Linux).
-        python_cmd = "python3"
-        script_arg = os.path.join(".roo", "burndown_server.py")
-        if os.name == 'nt':
-            script_arg = script_arg.replace("\\", "/") # Force forward slash for config consistency
+        python_cmd = sys.executable 
 
         self.config_data["mcpServers"] = {
             "github": {
@@ -155,7 +150,8 @@ class BurndownSetup:
             },
             "burndown-manager": {
                 "command": python_cmd,
-                "args": [script_arg], 
+                # Pointing to the INSTALLED script in .roo/
+                "args": [str(self.dest_agent_script)], 
                 "env": {
                     "AZURE_DEVOPS_SCOPE": ado_scope,
                     "AZURE_DEVOPS_EXT_PAT": ado_token,
@@ -167,79 +163,7 @@ class BurndownSetup:
             }
         }
 
-    # --- 4. VS CODE AUTO-RUN TASK ---
-    def create_vscode_task(self):
-        """Creates a terminal reminder on folder open."""
-        print(f"\n--- Creating VS Code Auto-Run Task ---")
-        vscode_dir = self.project_root / ".vscode"
-        tasks_file = vscode_dir / "tasks.json"
-        
-        checker_script_path = self.settings_dir / "check_profile.py"
-        
-        checker_content = """import os
-from pathlib import Path
-
-def load_env(path):
-    if not path.exists(): return
-    with open(path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line: continue
-            k, v = line.split('=', 1)
-            v = v.strip()
-            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                v = v[1:-1]
-            os.environ[k.strip()] = v
-
-root = Path(__file__).parent.parent
-env_path = root / ".env"
-load_env(env_path)
-
-profile = os.getenv("ROO_CODE_PROFILE_NAME", "default")
-print(f"\\n🛡️  PROJECT POLICY REMINDER")
-print(f"   Required Profile: {profile}")
-print(f"   (Please verify manually in Settings > Profiles)\\n")
-"""
-        try:
-            with open(checker_script_path, "w") as f:
-                f.write(checker_content)
-            
-            vscode_dir.mkdir(exist_ok=True)
-            
-            relative_script_path = os.path.join(".roo", "check_profile.py")
-            if os.name == 'nt':
-                relative_script_path = relative_script_path.replace("\\", "/")
-
-            # Use generic python3 here too for the task runner
-            task_content = {
-                "version": "2.0.0",
-                "tasks": [
-                    {
-                        "label": "Check RooCode Profile",
-                        "type": "shell",
-                        "command": "python3", 
-                        "args": [relative_script_path],
-                        "presentation": {
-                            "reveal": "always",
-                            "panel": "new",
-                            "focus": False
-                        },
-                        "runOptions": {
-                            "runOn": "folderOpen"
-                        },
-                        "problemMatcher": []
-                    }
-                ]
-            }
-            
-            with open(tasks_file, "w") as f:
-                json.dump(task_content, f, indent=4)
-            print(f"✅ Created .vscode/tasks.json")
-            
-        except Exception as e:
-            print(f"❌ Error creating VS Code Task: {e}")
-
-    # --- 5. DEVCONTAINER AUTOMATION ---
+    # --- 4. DEVCONTAINER AUTOMATION ---
     def inject_devcontainer_config(self):
         print("\n--- Checking DevContainer Configuration ---")
         
@@ -331,7 +255,7 @@ print(f"   (Please verify manually in Settings > Profiles)\\n")
                 modified = True
 
             if modified:
-                print("⚠️  Updating devcontainer.json...")
+                print("⚠️  Updating devcontainer.json (Comments will be removed)...")
                 with open(dc_path, "w") as f:
                     json.dump(data, f, indent=2)
                     f.write('\n')
@@ -355,8 +279,10 @@ print(f"   (Please verify manually in Settings > Profiles)\\n")
                 with open(self.settings_file, "r") as f:
                     existing = json.load(f)
             except: existing = {"mcpServers": {}}
+            
             if "mcpServers" not in existing: existing["mcpServers"] = {}
             existing["mcpServers"].update(self.config_data["mcpServers"])
+            
             with open(self.settings_file, "w") as f: json.dump(existing, f, indent=2)
             print("✅ Updated existing config")
         else:
@@ -416,11 +342,11 @@ print(f"   (Please verify manually in Settings > Profiles)\\n")
 
     def run(self):
         print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
-        self.configure_profile()
+        self.configure_profile() 
         self.install_agent_script() 
         self.configure_servers()
         self.save_configuration()
-        self.create_vscode_task() 
+        
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
