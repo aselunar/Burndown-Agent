@@ -3,7 +3,6 @@ import os
 import sys
 import argparse
 import re
-import stat
 import shutil
 from pathlib import Path
 
@@ -101,9 +100,7 @@ class BurndownSetup:
 
     # --- 2. INSTALL AGENT ASSETS ---
     def install_agent_script(self):
-        """Copies agent script and requirements to target .roo folder."""
         print("\n--- Installing Burndown Agent Assets ---")
-        
         try:
             self.settings_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
@@ -135,6 +132,7 @@ class BurndownSetup:
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_scope) 
 
+        # Capture the CURRENT python interpreter (inside venv)
         python_cmd = sys.executable 
 
         self.config_data["mcpServers"] = {
@@ -166,49 +164,19 @@ class BurndownSetup:
             }
         }
 
-    # --- 4. LAUNCH SCRIPT ---
-    def create_launch_script(self):
-        profile_name = self.collected_secrets.get("ROO_CODE_PROFILE_NAME", "default")
-        print(f"\n--- Creating Safe Launch Script ({profile_name}) ---")
-        
-        is_windows = os.name == 'nt'
-        script_name = "start_agent.bat" if is_windows else "start_agent.sh"
-        script_path = self.project_root / script_name
-        
-        if is_windows:
-            content = f'@echo off\ncode . --profile "{profile_name}"\n'
-        else:
-            content = f'#!/bin/sh\n# Launches VS Code with the enforced profile\ncode . --profile "{profile_name}"\n'
-
-        try:
-            with open(script_path, "w") as f:
-                f.write(content)
-            if not is_windows:
-                st = os.stat(script_path)
-                os.chmod(script_path, st.st_mode | stat.S_IEXEC)
-            print(f"✅ Created {script_name}")
-            self._update_gitignore(script_name)
-        except Exception as e:
-            print(f"❌ Error creating launch script: {e}")
-
-    # --- 5. VS CODE AUTO-RUN TASK (FIXED) ---
+    # --- 4. AUTO-RUN TASK (FIXED ENVIRONMENT) ---
     def create_vscode_task(self):
-        """Creates a dedicated check script and a task to run it."""
+        """Creates a dedicated check script and a task to run it using the SETUP python environment."""
         print(f"\n--- Creating VS Code Auto-Run Task ---")
         vscode_dir = self.project_root / ".vscode"
         tasks_file = vscode_dir / "tasks.json"
         
-        # We create a dedicated python script to avoid shell escaping issues
         checker_script_path = self.settings_dir / "check_profile.py"
         
+        # Standard, robust python script
         checker_content = """import os
 from pathlib import Path
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    # Fallback if dotenv not installed yet
-    print("⚠️  python-dotenv not installed. Skipping profile check.")
-    exit(0)
+from dotenv import load_dotenv
 
 # Load .env from project root (parent of .roo)
 root = Path(__file__).parent.parent
@@ -222,17 +190,18 @@ print(f"   Required Profile: {profile}")
 print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
 """
         try:
-            # 1. Write the checker script
             with open(checker_script_path, "w") as f:
                 f.write(checker_content)
             
-            # 2. Write the tasks.json
             vscode_dir.mkdir(exist_ok=True)
             
-            # Using relative path for portability
             relative_script_path = os.path.join(".roo", "check_profile.py")
             if os.name == 'nt':
                 relative_script_path = relative_script_path.replace("\\", "/")
+
+            # CRITICAL FIX: Use sys.executable to capture the CURRENT (venv) python path
+            # This ensures the task runs with the same python that has 'dotenv' installed
+            task_python = sys.executable
 
             task_content = {
                 "version": "2.0.0",
@@ -240,10 +209,9 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
                     {
                         "label": "Check RooCode Profile",
                         "type": "shell",
-                        "command": "python3",
-                        "args": [
-                            relative_script_path
-                        ],
+                        # Use the absolute path to the venv python
+                        "command": task_python, 
+                        "args": [relative_script_path],
                         "presentation": {
                             "reveal": "always",
                             "panel": "new",
@@ -251,7 +219,8 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
                         },
                         "runOptions": {
                             "runOn": "folderOpen"
-                        }
+                        },
+                        "problemMatcher": []
                     }
                 ]
             }
@@ -259,12 +228,12 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
             with open(tasks_file, "w") as f:
                 json.dump(task_content, f, indent=4)
             
-            print(f"✅ Created .vscode/tasks.json & .roo/check_profile.py")
+            print(f"✅ Created .vscode/tasks.json (Bound to: {task_python})")
             
         except Exception as e:
             print(f"❌ Error creating VS Code Task: {e}")
 
-    # --- 6. DEVCONTAINER AUTOMATION ---
+    # --- 5. DEVCONTAINER AUTOMATION ---
     def inject_devcontainer_config(self):
         print("\n--- Checking DevContainer Configuration ---")
         
@@ -346,6 +315,7 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
                 install_cmd = "apt-get update && apt-get install -y python3 python3-pip"
 
             pip_cmd = "pip install -r .roo/requirements.txt"
+
             current_cmd = data.get("postCreateCommand", "")
             
             updates = []
@@ -417,7 +387,8 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
 
         new_lines = []
         for key, val in self.collected_secrets.items():
-            if key not in existing_keys: new_lines.append(f"{key}={val}")
+            if key not in existing_keys:
+                new_lines.append(f"{key}={val}")
         
         if not new_lines: return
 
@@ -425,8 +396,11 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
         mode = "a" if self.env_file_path.exists() else "w"
         try:
             with open(self.env_file_path, mode) as f:
-                if mode == "a" and content and not content.endswith("\n"): f.write("\n")
-                for line in new_lines: f.write(f"{line}\n")
+                if mode == "a" and content and not content.endswith("\n"):
+                    f.write("\n")
+                for line in new_lines:
+                    f.write(f"{line}\n")
+            
             print(f"✅ Saved new secrets to {self.env_file_path} (Appended)")
             self._update_gitignore(".env")
         except Exception as e: print(f"❌ Error saving .env: {e}")
@@ -451,15 +425,13 @@ print(f"   Please ensure this profile is selected in Settings > Profiles.\\n")
         self.install_agent_script() 
         self.configure_servers()
         self.save_configuration()
-        self.create_launch_script() 
-        self.create_vscode_task() # FIXED: Generates safe python script
+        self.create_vscode_task() # FIXED: Now uses specific python path
         
         self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("👉 Use './start_agent.sh' to launch.")
+        print("👉 Reopen VS Code/DevContainer to see the compliance check.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
     setup.run()
-    
