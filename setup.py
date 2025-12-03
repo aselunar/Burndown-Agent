@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-import shutil
 import argparse
 import re
 from pathlib import Path
