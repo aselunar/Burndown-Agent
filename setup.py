@@ -3,6 +3,8 @@ import os
 import sys
 import argparse
 import shutil
+import stat
+import re
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -276,6 +278,37 @@ class BurndownSetup:
 
             # Python
             is_alpine = "alpine" in raw_content.lower()
+
+            if not is_alpine:
+                # Check referenced Docker Compose files
+                compose_files = data.get("dockerComposeFile")
+                if compose_files:
+                    if isinstance(compose_files, str): compose_files = [compose_files]
+                    for cf_name in compose_files:
+                        cf_path = dc_path.parent / cf_name
+                        if cf_path.exists():
+                            try:
+                                with open(cf_path, "r") as cf:
+                                    if "alpine" in cf.read().lower():
+                                        is_alpine = True
+                                        print(f"🔍 Detected Alpine in {cf_name}")
+                                        break
+                            except: pass
+            
+            if not is_alpine:
+                # Check referenced Dockerfile
+                build = data.get("build")
+                if isinstance(build, dict) and "dockerfile" in build:
+                    df_path = dc_path.parent / build["dockerfile"]
+                    if df_path.exists():
+                        try:
+                            with open(df_path, "r") as df:
+                                if "alpine" in df.read().lower():
+                                    is_alpine = True
+                                    print(f"🔍 Detected Alpine in {build['dockerfile']}")
+                        except: pass
+
+            # The exact commands we verified work:
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 py3-pip"
             else:
