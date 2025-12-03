@@ -1,0 +1,13 @@
+# 🛡️ PROJECT CONFIGURATION
+**REQUIRED PROFILE:** default
+
+## ⚠️ AGENT INSTRUCTION
+Before processing any request, you must verify your active configuration:
+
+1. Check if the active RooCode Configuration Profile is set to **"default"**.
+2. If it is NOT **"default"**:
+   - STOP immediately.
+   - Reply: "⚠️ **WRONG PROFILE DETECTED** ⚠️\nThis project requires the 'default' profile.\nPlease switch profiles in settings."
+3. If it IS **"default"**:
+   - Confirm readiness: "✅ Profile 'default' active. Ready for instructions."
+   - Wait for further user commands.
