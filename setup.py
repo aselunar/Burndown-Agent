@@ -3,7 +3,6 @@ import os
 import sys
 import argparse
 import re
-import stat
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -283,23 +282,45 @@ class BurndownSetup:
         self._save_secrets_to_env()
 
     def _save_secrets_to_env(self):
-        existing_content = ""
+        existing_keys = set()
+        content = ""
+        
+        # 1. Parse existing keys to avoid partial string match errors
         if self.env_file_path.exists():
-            with open(self.env_file_path, "r") as f: existing_content = f.read()
+            try:
+                with open(self.env_file_path, "r") as f:
+                    content = f.read()
+                    
+                lines = content.splitlines()
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key = line.split("=", 1)[0].strip()
+                        existing_keys.add(key)
+            except Exception as e:
+                print(f"⚠️  Could not read existing .env: {e}")
 
+        # 2. Determine what needs to be added
         new_lines = []
         for key, val in self.collected_secrets.items():
-            if key not in existing_content: new_lines.append(f"{key}={val}")
+            if key not in existing_keys:
+                new_lines.append(f"{key}={val}")
         
-        if not new_lines: return
+        if not new_lines:
+            return
 
         print("\n--- Persistence Setup ---")
+        # 3. Append to file
         mode = "a" if self.env_file_path.exists() else "w"
         try:
             with open(self.env_file_path, mode) as f:
-                if mode == "a" and existing_content and not existing_content.endswith("\n"): f.write("\n")
-                for line in new_lines: f.write(f"{line}\n")
-            print(f"✅ Saved secrets to {self.env_file_path}")
+                # Ensure we start on a new line if appending
+                if mode == "a" and content and not content.endswith("\n"):
+                    f.write("\n")
+                for line in new_lines:
+                    f.write(f"{line}\n")
+            
+            print(f"✅ Saved new secrets to {self.env_file_path} (Appended)")
             self._update_gitignore(".env")
         except Exception as e: print(f"❌ Error saving .env: {e}")
 
