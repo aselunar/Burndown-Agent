@@ -55,6 +55,15 @@ class BurndownSetup:
         self.collected_secrets = {}
         self._load_env_file()
 
+    def _create_requirements_file(self):
+        """Create requirements.txt with correct dependencies"""
+        req_content = """fastmcp
+    requests
+    python-dotenv
+    """
+        with open(self.dest_requirements, "w") as f:
+            f.write(req_content)
+
     def _load_env_file(self):
         if not self.env_file_path.exists(): return
         try:
@@ -107,16 +116,43 @@ class BurndownSetup:
             print(f"❌ Error creating directory {self.settings_dir}: {e}")
             sys.exit(1)
 
-        # Copy the REAL server logic (burndown_server.py)
+        # Copy the server script
         if self.source_agent_script.exists():
             shutil.copy2(self.source_agent_script, self.dest_agent_script)
             print(f"✅ Installed logic to {self.dest_agent_script}")
         else:
             print(f"⚠️  Source script missing. Ensure burndown_server.py is present.")
 
-        if self.source_requirements.exists():
-            shutil.copy2(self.source_requirements, self.dest_requirements)
-            print(f"✅ Installed requirements to {self.dest_requirements}")
+        # Create requirements.txt with correct content
+        self._create_requirements_file()
+        print(f"✅ Created requirements.txt")
+
+        # Create virtual environment
+        venv_path = self.settings_dir / "venv"
+        if not venv_path.exists():
+            print("🔧 Creating virtual environment...")
+            import subprocess
+            try:
+                subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
+                print("✅ Virtual environment created")
+            except Exception as e:
+                print(f"❌ Error creating venv: {e}")
+                sys.exit(1)
+
+        # Install dependencies
+        print("📦 Installing dependencies...")
+        pip_path = venv_path / "bin" / "pip"
+        if os.name == 'nt':  # Windows
+            pip_path = venv_path / "Scripts" / "pip.exe"
+        
+        try:
+            import subprocess
+            subprocess.run([str(pip_path), "install", "-r", str(self.dest_requirements)], 
+                        check=True, capture_output=True)
+            print("✅ Dependencies installed")
+        except Exception as e:
+            print(f"❌ Error installing dependencies: {e}")
+            sys.exit(1)
 
     # --- 3. SERVER CONFIGURATION ---
     def configure_servers(self):
