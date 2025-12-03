@@ -1,9 +1,7 @@
 import json
 import os
 import sys
-import shutil
 import argparse
-import re
 from pathlib import Path
 
 # --- Configuration Constants ---
@@ -20,15 +18,16 @@ MCP_SERVERS = {
     }
 }
 
-ROO_EXTENSION_ID = "rooveterinaryinc.roo-cline"
-
 class BurndownSetup:
     def __init__(self):
         self.config_data = {"mcpServers": {}}
         
         parser = argparse.ArgumentParser(description="Configure RooCode MCP Servers for a target project.")
         parser.add_argument("--target", type=str, help="Path to the target project directory (default: current directory)")
+        parser.add_argument("--profile", type=str, help="VS Code Profile Name (Optional)", default="Default")
         args = parser.parse_args()
+
+        self.target_profile = args.profile
 
         if args.target:
             self.project_root = Path(args.target).resolve()
@@ -75,31 +74,18 @@ class BurndownSetup:
         except KeyboardInterrupt:
             sys.exit(0)
 
-    # --- SIMPLIFIED: Profile Policy ---
-    def configure_profile(self):
-        print("\n--- Project Configuration Profile ---")
-        print("ℹ️  RooCode uses Configuration Profiles (Settings > Profiles) to manage API keys and Models.")
-        print("    We will save the required Profile Name here so you know which one to select.")
-        
-        profile = os.getenv("ROO_CODE_PROFILE_NAME")
-        if not profile:
-            print("   What is the name of the RooCode Profile for this project?")
-            print("   (e.g. 'default', 'Work', 'Personal')")
-            # CHANGED: Default is now lowercase 'default' to match standard internal naming
-            profile = input("   Profile Name [default]: ").strip()
-            if not profile: profile = "default"
-            self.collected_secrets["ROO_CODE_PROFILE_NAME"] = profile
-
     def configure_servers(self):
         print("\n--- Configuring MCP Access ---")
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
+        print("\n--- Configuring Azure DevOps MCP ---")
         ado_scope = self.get_user_input("Azure DevOps Scope (Org Name or Project URL)", "AZURE_DEVOPS_SCOPE")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
 
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_scope) 
 
+        # We run the server using the python executable that ran this script
         python_cmd = sys.executable 
 
         self.config_data["mcpServers"] = {
@@ -117,6 +103,7 @@ class BurndownSetup:
                 "disabled": False,
                 "autoApprove": []
             },
+            # THIS IS YOUR NEW LOGIC SERVER
             "burndown-manager": {
                 "command": python_cmd,
                 "args": [str(self.burndown_script)],
@@ -129,108 +116,6 @@ class BurndownSetup:
                 "autoApprove": []
             }
         }
-
-    def create_project_rules(self):
-        """Creates .clinerules with Profile Reminder (Phase 1: Compliance Only)."""
-        rules_path = self.project_root / ".clinerules"
-        
-        profile_name = self.collected_secrets.get("ROO_CODE_PROFILE_NAME", "Unknown")
-
-        # Simplified "Compliance Only" instruction set
-        content = f"""# 🛡️ PROJECT CONFIGURATION
-**REQUIRED PROFILE:** {profile_name}
-
-## ⚠️ AGENT INSTRUCTION
-Before processing any request, you must verify your active configuration:
-
-1. Check if the active RooCode Configuration Profile is set to **"{profile_name}"**.
-2. If it is NOT **"{profile_name}"**:
-   - STOP immediately.
-   - Reply: "⚠️ **WRONG PROFILE DETECTED** ⚠️\\nThis project requires the '{profile_name}' profile.\\nPlease switch profiles in settings."
-3. If it IS **"{profile_name}"**:
-   - Confirm readiness: "✅ Profile '{profile_name}' active. Ready for instructions."
-   - Wait for further user commands.
-"""
-        try:
-            with open(rules_path, "w") as f:
-                f.write(content)
-            print(f"✅ Created .clinerules (Requires Profile: {profile_name}).")
-        except Exception as e:
-            print(f"❌ Error creating .clinerules: {e}")
-
-    # --- DEVCONTAINER AUTOMATION ---
-    def inject_devcontainer_config(self):
-        print("\n--- Checking DevContainer Configuration ---")
-        
-        dc_path = self.project_root / ".devcontainer" / "devcontainer.json"
-        if not dc_path.exists():
-            dc_path = self.project_root / "devcontainer.json"
-            if not dc_path.exists():
-                print("ℹ️  No devcontainer.json found. Skipping injection.")
-                return
-
-        print(f"🔍 Found {dc_path.name}")
-        
-        try:
-            with open(dc_path, "r") as f:
-                raw_content = f.read()
-
-            pattern = r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/'
-            def replacer(match):
-                return match.group(1) if match.group(1) else ""
-            
-            json_content = re.sub(pattern, replacer, raw_content, flags=re.DOTALL)
-            data = json.loads(json_content)
-            modified = False
-
-            # 1. Inject Extension
-            customizations = data.setdefault("customizations", {})
-            vscode_cust = customizations.setdefault("vscode", {})
-            extensions = vscode_cust.setdefault("extensions", [])
-            if ROO_EXTENSION_ID not in extensions:
-                extensions.append(ROO_EXTENSION_ID)
-                print(f"✅ Added {ROO_EXTENSION_ID} to extensions.")
-                modified = True
-
-            # 2. Inject Persistence Mount (CRITICAL FOR SAVING PROFILE SELECTION)
-            mounts = data.setdefault("mounts", [])
-            target_mount = "/home/vscode/.vscode-server/data"
-            mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
-            
-            if not any("vscode-server-data" in m for m in mounts):
-                mounts.append(mount_str)
-                print(f"✅ Injected persistence mount (Saves Profile Selection).")
-                modified = True
-
-            # 3. Inject Python Command
-            is_alpine = "alpine" in raw_content.lower()
-            if not is_alpine: pass 
-
-            if is_alpine:
-                install_cmd = "apk add --no-cache python3 curl"
-            else:
-                install_cmd = "apt-get update && apt-get install -y python3 curl"
-
-            current_cmd = data.get("postCreateCommand", "")
-            if "python3" not in current_cmd:
-                if current_cmd:
-                    data["postCreateCommand"] = install_cmd + " && " + current_cmd
-                else:
-                    data["postCreateCommand"] = install_cmd
-                print(f"✅ Injected Python install command.")
-                modified = True
-
-            if modified:
-                print("⚠️  Updating devcontainer.json (Comments will be removed)...")
-                with open(dc_path, "w") as f:
-                    json.dump(data, f, indent=2)
-                    f.write('\n')
-                print("✅ devcontainer.json updated successfully.")
-            else:
-                print("✅ devcontainer.json is already up to date.")
-
-        except Exception as e:
-            print(f"❌ Could not automatically update devcontainer.json: {e}")
 
     def save_configuration(self):
         print("\n--- Finalizing Configuration ---")
@@ -253,7 +138,7 @@ Before processing any request, you must verify your active configuration:
             print("✅ Updated existing config at {self.settings_file}")
         else:
             with open(self.settings_file, "w") as f: json.dump(self.config_data, f, indent=2)
-            print(f"✅ Created new configuration file at: {self.settings_file}")
+            print(f"✅ Created new config at {self.settings_file}")
 
         self._update_gitignore(".roo/")
         self._save_secrets_to_env()
@@ -295,14 +180,11 @@ Before processing any request, you must verify your active configuration:
 
     def run(self):
         print(f"🔥 Burndown Agent Setup Initialized (Project Mode)")
-        self.configure_profile() # Step 1: Policy Name
-        self.configure_servers() # Step 2: Keys & Tools
+        self.configure_servers()
         self.save_configuration()
-        self.create_project_rules()
-        self.inject_devcontainer_config()
         
         print(f"\n🎉 Setup Complete for {self.project_root.name}.")
-        print("ℹ️  Guardrails Active: Agent will verify Profile selection.")
+        print("👉 You can now ask RooCode: 'Check the burndown manager for tasks'.")
 
 if __name__ == "__main__":
     setup = BurndownSetup()
