@@ -132,7 +132,6 @@ class BurndownSetup:
         venv_path = self.settings_dir / "venv"
         if not venv_path.exists():
             print("🔧 Creating virtual environment...")
-            import subprocess
             try:
                 subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
                 print("✅ Virtual environment created")
@@ -147,7 +146,6 @@ class BurndownSetup:
             pip_path = venv_path / "Scripts" / "pip.exe"
         
         try:
-            import subprocess
             subprocess.run([str(pip_path), "install", "-r", str(self.dest_requirements)], 
                         check=True, capture_output=True)
             print("✅ Dependencies installed")
