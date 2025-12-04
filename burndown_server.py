@@ -27,7 +27,10 @@ def get_base_url():
     if not ADO_ORG_URL:  
         return None  
     parsed = urlparse(ADO_ORG_URL.rstrip('/'))  
-    return f"{parsed.scheme}://{parsed.netloc}/{parsed.path.split('/')[1]}"  
+    path_parts = parsed.path.split('/')
+    if len(path_parts) > 1 and path_parts[1]:
+        return f"{parsed.scheme}://{parsed.netloc}/{path_parts[1]}"
+    return None
 
 def get_headers():
     if not ADO_PAT: return None
@@ -132,7 +135,8 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
         return output
 
     except Exception as e:
-        return f"❌ Error fetching tasks: {str(e)}"
+        print(f"Unexpected error in _get_burndown_tasks_impl: {e}")
+        raise Exception(f"❌ Error fetching tasks: {str(e)}")
     
 @mcp.tool()
 def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
