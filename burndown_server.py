@@ -58,15 +58,16 @@ def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
             # Fetch Top Parents
             pq = "SELECT [System.Id] FROM WorkItems WHERE [System.State] NOT IN ('Closed','Removed','Resolved') AND [System.Parent]=0 ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
             parents = run_wiql(pq)
+            print("Parents fetched:", parents)
             for p in parents:
                 if len(tasks) >= limit: break
-                cq = f"SELECT [System.Id] FROM WorkItems WHERE [System.Parent]={p['id']} AND [System.State] NOT IN ('Closed','Removed','Resolved') AND [System.WorkItemType] IN ('Task','Bug')"
+                cq = f"SELECT [System.Id] FROM WorkItems WHERE [System.Parent]={p['id']} AND [System.State] NOT IN ('Closed','Removed','Resolved') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
                 children = run_wiql(cq)
                 if children:
                     tasks.extend(get_work_items([c['id'] for c in children]))
         else:
             # Direct Query
-            q = "SELECT [System.Id] FROM WorkItems WHERE [System.State] NOT IN ('Closed','Removed','Resolved') AND [System.WorkItemType] IN ('Task','Bug') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
+            q = "SELECT [System.Id] FROM WorkItems WHERE [System.State] NOT IN ('Closed','Removed','Resolved') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
             refs = run_wiql(q)
             tasks.extend(get_work_items([r['id'] for r in refs[:limit]]))
 
