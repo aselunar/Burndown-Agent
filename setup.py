@@ -276,8 +276,7 @@ class BurndownSetup:
                                         is_alpine = True
                                         print(f"🔍 Detected Alpine in {cf_name}")
                                         break
-                            except (FileNotFoundError, IOError):
-                                pass
+                            except (FileNotFoundError, IOError): pass
             
             if not is_alpine:
                 # Check referenced Dockerfile
