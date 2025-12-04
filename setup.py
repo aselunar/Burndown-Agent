@@ -166,19 +166,6 @@ class BurndownSetup:
         ado_args = MCP_SERVERS["azure-devops"]["args"].copy()
         ado_args.append(ado_scope) 
 
-        # USE GENERIC COMMAND for portability (Host vs Container)
-        python_cmd = "python3"
-        
-        # CALCULATE RELATIVE PATH for portability (Host vs Container)
-        try:
-            script_rel_path = self.dest_agent_script.relative_to(self.project_root)
-        except ValueError:
-            script_rel_path = self.dest_agent_script
-
-        script_arg = str(script_rel_path)
-        if os.name == 'nt':
-            script_arg = script_arg.replace("\\", "/")
-
         if os.name == 'nt':
             python_cmd = ".roo/venv/Scripts/python.exe"
         else:
@@ -300,13 +287,6 @@ class BurndownSetup:
                 pip_cmd = "rm -rf .roo/venv && python3 -m venv .roo/venv && .roo/venv/bin/pip install -r .roo/requirements.txt"
 
             current_cmd = data.get("postCreateCommand", "")
-            
-            updates = []
-            if "python3" not in current_cmd:
-                updates.append(install_cmd)
-            
-            if "requirements.txt" not in current_cmd:
-                updates.append(pip_cmd)
 
             commands = []
 
@@ -358,7 +338,7 @@ class BurndownSetup:
             existing["mcpServers"].update(self.config_data["mcpServers"])
             
             with open(self.settings_file, "w") as f: json.dump(existing, f, indent=2)
-            print("✅ Updated existing config at {self.settings_file}")
+            print(f"✅ Updated existing config at {self.settings_file}")
         else:
             with open(self.settings_file, "w") as f: json.dump(self.config_data, f, indent=2)
             print(f"✅ Created new config at {self.settings_file}")
