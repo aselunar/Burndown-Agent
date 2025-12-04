@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, '.')  # Or sys.path.insert(0, '.roo') if testing installed version
+sys.path.insert(0, '.')
 
 # Can only test once env variables are set. To setup use `python3 setup.py`
 from burndown_server import _get_burndown_tasks_impl
