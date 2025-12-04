@@ -46,11 +46,11 @@ def run_wiql(query: str):
             print(f"WIQL query failed with status {response.status_code}: {response.text}")
     except requests.RequestException as e:  
         # Handle network/API errors  
-        return []  
+        return e
     except Exception as e:  
         # Log unexpected errors for debugging  
         print(f"Unexpected error in run_wiql: {e}")  
-        return []  
+        return e 
 
 def get_work_items(ids: list):
     if not ids: return []
@@ -70,7 +70,7 @@ def get_work_items(ids: list):
         print(f"Error fetching work items: {e}")  
         return []  
 
-# @mcp.tool()
+# Internal implementation for testing
 def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) -> str:
     """
     Fetches the next batch of tasks to burn down from Azure DevOps.
