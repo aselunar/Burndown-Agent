@@ -65,6 +65,8 @@ def get_work_items(ids: list):
             res = requests.get(api_url, headers=get_headers())
             if res.status_code == 200:
                 all_items.extend(res.json().get("value", []))
+            else:
+                print(f"Failed to fetch work items for chunk {ids_str}: {res.status_code}: {res.text}")
         return all_items
     except requests.RequestException as e:  
         print(f"Error fetching work items: {e}")  
