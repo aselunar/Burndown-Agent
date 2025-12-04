@@ -119,8 +119,7 @@ def get_work_items(ids: list):
                 print(f"Failed to fetch work items for chunk {ids_str}: {res.status_code}: {res.text}")
         return all_items
     except requests.RequestException as e:  
-        print(f"Error fetching work items: {e}")  
-        return []  
+        raise Exception(f"Error fetching work items: {e}")
 
 # Internal implementation for testing
 def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) -> str:
