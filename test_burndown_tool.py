@@ -5,9 +5,14 @@ sys.path.insert(0, '.')
 from burndown_server import _get_burndown_tasks_impl
 
 print("=== Testing without prioritize_parents ===")
-result = _get_burndown_tasks_impl(limit=10, prioritize_parents=False)
-print(result)
-
+try:
+    result = _get_burndown_tasks_impl(limit=10, prioritize_parents=False)
+    print(result)
+except Exception as e:
+    print(f"Error: {e}")
 print("\n=== Testing with prioritize_parents ===")
-result = _get_burndown_tasks_impl(limit=5, prioritize_parents=True)
-print(result)
+try:
+    result = _get_burndown_tasks_impl(limit=5, prioritize_parents=True)
+    print(result)
+except Exception as e:
+    print(f"Error: {e}")
