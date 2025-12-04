@@ -332,7 +332,7 @@ class BurndownSetup:
                 commands.append(current_cmd)
 
             # Only update if we added something new
-            if len(commands) > (1 if current_cmd else 0):
+            if len(commands) > (1 if current_cmd and current_cmd.strip() else 0):
                 data["postCreateCommand"] = " && ".join(commands)
                 print(f"✅ Updated postCreateCommand")
                 modified = True
