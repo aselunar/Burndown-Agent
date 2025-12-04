@@ -121,7 +121,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
     """
     try:
         if not project_name:
-            return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL"
+            return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL Expected format: https://dev.azure.com/org/project or https://org.visualstudio.com/project"
         
         project_filter = f"[System.TeamProject]='{project_name}'"
         tasks = []
