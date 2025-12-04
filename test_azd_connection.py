@@ -1,4 +1,7 @@
-import os, base64, requests, sys
+import os
+import base64
+import requests
+import sys
 from dotenv import load_dotenv
 from burndown_server import extract_project_name
 load_dotenv()
