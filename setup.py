@@ -241,7 +241,10 @@ python-dotenv
                 modified = True
 
             # B. Persistence Mount
-            mounts = data.setdefault("mounts", [])
+            mounts = data.get("mounts", [])
+            if not isinstance(mounts, list):
+                mounts = []
+                data["mounts"] = mounts
             target_mount = "/home/vscode/.vscode-server/data"
             mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
             
