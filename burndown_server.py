@@ -17,11 +17,11 @@ ADO_ORG_URL = os.getenv("AZURE_DEVOPS_ORG_URL") or os.getenv("AZURE_DEVOPS_SCOPE
 ADO_PAT = os.getenv("AZURE_DEVOPS_EXT_PAT") or os.getenv("AZURE_DEVOPS_TOKEN")
 
 # Extract project name from URL
-PROJECT_NAME = None
+project_name = None
 if ADO_ORG_URL:
     url_parts = ADO_ORG_URL.rstrip('/').split('/')
     if len(url_parts) >= 5:
-        PROJECT_NAME = unquote(url_parts[4])
+        project_name = unquote(url_parts[4])
 
 def get_base_url():  
     if not ADO_ORG_URL:  
@@ -78,10 +78,10 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
     Fetches the next batch of tasks to burn down from Azure DevOps.
     """
     try:
-        if not PROJECT_NAME:
+        if not project_name:
             return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL"
         
-        project_filter = f"[System.TeamProject]='{PROJECT_NAME}'"
+        project_filter = f"[System.TeamProject]='{project_name}'"
         tasks = []
         
         if prioritize_parents:
