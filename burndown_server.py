@@ -127,7 +127,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
             tasks.extend(get_work_items([r['id'] for r in refs[:limit]]))
 
         if not tasks:
-            return "✅ No active tasks found. Backlog is clear!"
+            return f"✅ No active open tasks found in {project_name}. Backlog is clear!"
 
         output = f"## 🚀 Burndown Mission ({len(tasks[:limit])} items)\n"
         for t in tasks[:limit]:
