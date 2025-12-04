@@ -146,41 +146,47 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
             max_parents = min(len(parents), limit * 3)
             no_progress_count = 0
 
-            for i, p in enumerate(parents):
-                if len(tasks) >= limit or i >= max_parents or no_progress_count >= 10:
-                    break
-                
-                # Skip if already added
-                if p['id'] in seen_ids:
-                    continue
-                
-                initial_len = len(tasks)
-                
-                cq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.Parent]={p['id']} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed')"
+            parent_ids = [p['id'] for i, p in enumerate(parents) if i < max_parents and p['id'] not in seen_ids]
+            initial_len = len(tasks)
+            if parent_ids:
+                # Batch query for all children of these parents
+                parent_ids_str = ",".join(str(pid) for pid in parent_ids)
+                cq = f"SELECT [System.Id], [System.Parent] FROM WorkItems WHERE {project_filter} AND [System.Parent] IN ({parent_ids_str}) AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed')"
                 children = run_wiql(cq)
+                child_id_map = {}
                 if children:
-                    # Has children - add the children (they're bottom level)
-                    child_items = get_work_items([c['id'] for c in children])
-                    for item in child_items:
-                        if len(tasks) >= limit:
-                            break
-                        if item['id'] not in seen_ids:
-                            tasks.append(item)
-                            seen_ids.add(item['id'])
+                    # Map parent id to its children
+                    for c in children:
+                        pid = c.get('parent') or c.get('System.Parent')
+                        if pid:
+                            child_id_map.setdefault(pid, []).append(c['id'])
                 else:
-                    # No children - parent itself is bottom level
-                    parent_items = get_work_items([p['id']])
-                    for item in parent_items:
-                        if len(tasks) >= limit:
-                            break
-                        if item['id'] not in seen_ids:
-                            tasks.append(item)
-                            seen_ids.add(item['id'])
-                    no_progress_count = 0
-                
-                # Track progress per iteration
-                tasks_added = (len(tasks) > initial_len)
-                no_progress_count = 0 if tasks_added else no_progress_count + 1
+                    child_id_map = {}
+                # For each parent, add children if any, else add parent itself
+                for pid in parent_ids:
+                    if len(tasks) >= limit:
+                        break
+                    if pid in child_id_map and child_id_map[pid]:
+                        # Has children - add the children (they're bottom level)
+                        child_items = get_work_items(child_id_map[pid])
+                        for item in child_items:
+                            if len(tasks) >= limit:
+                                break
+                            if item['id'] not in seen_ids:
+                                tasks.append(item)
+                                seen_ids.add(item['id'])
+                    else:
+                        # No children - parent itself is bottom level
+                        parent_items = get_work_items([pid])
+                        for item in parent_items:
+                            if len(tasks) >= limit:
+                                break
+                            if item['id'] not in seen_ids:
+                                tasks.append(item)
+                                seen_ids.add(item['id'])
+            # Track progress for batching
+            tasks_added = (len(tasks) > initial_len)
+            no_progress_count = 0 if tasks_added else no_progress_count + 1
         else:
             # Direct Query
             q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
