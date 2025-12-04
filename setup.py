@@ -152,7 +152,7 @@ class BurndownSetup:
         
         try:
             subprocess.run([str(pip_path), "install", "-r", str(self.dest_requirements)], 
-                        check=True, capture_output=True)
+                        check=True)
             print("✅ Dependencies installed")
         except subprocess.CalledProcessError as e:
             print(f"❌ Error installing dependencies: {e}")
