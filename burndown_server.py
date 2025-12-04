@@ -17,11 +17,33 @@ ADO_ORG_URL = os.getenv("AZURE_DEVOPS_ORG_URL")
 ADO_PAT = os.getenv("AZURE_DEVOPS_EXT_PAT") or os.getenv("AZURE_DEVOPS_TOKEN")
 
 # Extract project name from URL
-project_name = None
-if ADO_ORG_URL:
-    url_parts = ADO_ORG_URL.rstrip('/').split('/')
-    if len(url_parts) >= 5:
-        project_name = unquote(url_parts[4])
+def extract_project_name(ado_url):
+    """
+    Extracts the project name from an Azure DevOps URL.
+    Handles both dev.azure.com and visualstudio.com formats.
+    Returns None if extraction fails.
+    """
+    if not ado_url:
+        return None
+    try:
+        parsed = urlparse(ado_url.rstrip('/'))
+        # dev.azure.com/org/project/_apis/...
+        if parsed.netloc.endswith("dev.azure.com"):
+            path_parts = [p for p in parsed.path.split('/') if p]
+            # Expect at least org/project
+            if len(path_parts) >= 2:
+                return unquote(path_parts[1])
+        # org.visualstudio.com/project/_apis/...
+        elif parsed.netloc.endswith("visualstudio.com"):
+            path_parts = [p for p in parsed.path.split('/') if p]
+            if len(path_parts) >= 1:
+                return unquote(path_parts[0])
+        # Unknown format
+        return None
+    except Exception as e:
+        print(f"Error extracting project name from URL: {e}")
+        return None
+project_name = extract_project_name(ADO_ORG_URL)
 
 def get_base_url():  
     if not ADO_ORG_URL:  
