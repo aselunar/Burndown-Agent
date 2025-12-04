@@ -76,4 +76,4 @@ From your test container, run the curl command (Option B) above.
 
 You can test this by prompting it in RooCode with the number of items to pull and whether or not to respect parent priority. You can also run `python3 test_burndown_tool.py` to test the underlying logic. You will need to be in the correct source first, so use `source .roo/venv/bin/activate`.
 
-To test in dogfood mode, modify .roo/mcp.json -> mcpServers.burndown_manager.args from [`.roo/burndown_server.py`] to [`burndown_server.py`]. Then restart the RooCode server.
+To test in dogfood mode without a local server, modify .roo/mcp.json -> mcpServers.burndown_manager.args from [`.roo/burndown_server.py`] to [`burndown_server.py`]. Then restart the RooCode server.
