@@ -301,7 +301,21 @@ python-dotenv
             commands = []
 
             # 1. Python installation (if not present)
-            if "python3" not in current_cmd and "apk add" not in current_cmd and "apt-get" not in current_cmd:
+            python_install_patterns = [
+                r'\bapt(-get)?\s+install\s+.*python3\b',
+                r'\bapk\s+add\s+.*python3\b',
+                r'\bdnf\s+install\s+.*python3\b',
+                r'\byum\s+install\s+.*python3\b',
+                r'\bzypper\s+install\s+.*python3\b',
+                r'\bpacman\s+-S\s+.*python3\b',
+                r'\bpython3\s+-m\s+venv\b',  # direct venv creation
+            ]
+            def has_python_install(cmd):
+                for pat in python_install_patterns:
+                    if re.search(pat, cmd, re.IGNORECASE):
+                        return True
+                return False
+            if not has_python_install(current_cmd):
                 commands.append(install_cmd)
 
             # 2. Pip requirements (if not present)
