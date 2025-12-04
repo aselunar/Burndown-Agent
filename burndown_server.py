@@ -69,13 +69,9 @@ def run_wiql(query: str):
             return response.json().get("workItems", [])
         else:
             print(f"WIQL query failed with status {response.status_code}: {response.text}")
-    except requests.RequestException as e:  
-        # Handle network/API errors  
-        return e
-    except Exception as e:  
-        # Log unexpected errors for debugging  
+    except (requests.RequestException, Exception) as e:  
         print(f"Unexpected error in run_wiql: {e}")  
-        return e 
+        return [] 
 
 def get_work_items(ids: list):
     if not ids: return []
