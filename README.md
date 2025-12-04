@@ -56,7 +56,7 @@ This is the cleanest method. You run the script on your Mac/Windows host, target
 
 5. Finish: Open the target project in VS Code (Reopen in Container) and you are ready.
 
-# Use It
+## Use It
 In RooCode chat:
 
 `Get my top 5 burndown tasks`
