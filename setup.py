@@ -57,7 +57,7 @@ class BurndownSetup:
         self._load_env_file()
 
     def _create_requirements_file(self):
-        source_req = Path("requirements.txt")
+        source_req = self.source_requirements
         if source_req.exists():
             with open(source_req, "r") as src, open(self.dest_requirements, "w") as dst:
                 dst.write(src.read())
