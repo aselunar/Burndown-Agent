@@ -313,9 +313,11 @@ class BurndownSetup:
                 r'\bpython3\s+-m\s+venv\b',  # direct venv creation
             ]
             def has_python_install(cmd):
-                for pat in python_install_patterns:
-                    if re.search(pat, cmd, re.IGNORECASE):
-                        return True
+                subcommands = [c.strip() for c in re.split(r'&&|;', cmd) if c.strip()]
+                for cmd in subcommands:
+                    for pat in python_install_patterns:
+                        if re.search(pat, cmd, re.IGNORECASE):
+                            return True
                 return False
             if not has_python_install(current_cmd):
                 commands.append(install_cmd)
