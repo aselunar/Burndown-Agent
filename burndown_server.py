@@ -13,7 +13,7 @@ load_dotenv(env_path)
 mcp = FastMCP("Burndown Manager")
 
 # ADO Configuration
-ADO_ORG_URL = os.getenv("AZURE_DEVOPS_ORG_URL") or os.getenv("AZURE_DEVOPS_SCOPE")
+ADO_ORG_URL = os.getenv("AZURE_DEVOPS_ORG_URL")
 ADO_PAT = os.getenv("AZURE_DEVOPS_EXT_PAT") or os.getenv("AZURE_DEVOPS_TOKEN")
 
 # Extract project name from URL
