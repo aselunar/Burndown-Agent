@@ -55,8 +55,8 @@ def get_work_items(ids: list):
         return all_items
     except: return []
 
-@mcp.tool()
-def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
+# @mcp.tool()
+def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) -> str:
     """
     Fetches the next batch of tasks to burn down from Azure DevOps.
     """
@@ -97,6 +97,13 @@ def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
 
     except Exception as e:
         return f"❌ Error fetching tasks: {str(e)}"
+    
+@mcp.tool()
+def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
+    """
+    Fetches the next batch of tasks to burn down from Azure DevOps.
+    """
+    return _get_burndown_tasks_impl(limit, prioritize_parents)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
