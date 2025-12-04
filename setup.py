@@ -335,7 +335,8 @@ class BurndownSetup:
             try:
                 with open(self.settings_file, "r") as f:
                     existing = json.load(f)
-            except: existing = {"mcpServers": {}}
+            except (FileNotFoundError, json.JSONDecodeError):
+                existing = {"mcpServers": {}}
             
             if "mcpServers" not in existing: existing["mcpServers"] = {}
             existing["mcpServers"].update(self.config_data["mcpServers"])
