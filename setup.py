@@ -155,8 +155,8 @@ class BurndownSetup:
             print("✅ Dependencies installed")
         except subprocess.CalledProcessError as e:
             print(f"❌ Error installing dependencies: {e}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
+            print(f"stdout: {e.stdout.decode() if e.stdout else ''}")
+            print(f"stderr: {e.stderr.decode() if e.stderr else ''}")
 
     # --- 3. SERVER CONFIGURATION ---
     def configure_servers(self):
