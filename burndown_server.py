@@ -64,7 +64,6 @@ def get_base_url():
                 return f"{parsed.scheme}://{parsed.netloc}/{org}/{project}"
         # org.visualstudio.com/project/_apis/...
         elif parsed.netloc.endswith("visualstudio.com"):
-            org = parsed.netloc.split('.')[0]
             path_parts = [p for p in parsed.path.split('/') if p]
             if len(path_parts) >= 1:
                 project = path_parts[0]
