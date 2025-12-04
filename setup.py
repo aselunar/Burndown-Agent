@@ -357,8 +357,8 @@ python-dotenv
             try:
                 with open(self.settings_file, "r") as f:
                     existing = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError):
-                existing = {"mcpServers": {}}
+            except json.JSONDecodeError:
+                print(f"⚠️  Warning: Invalid JSON in {self.settings_file}. Falling back to empty config.")
             
             if "mcpServers" not in existing: existing["mcpServers"] = {}
             existing["mcpServers"].update(self.config_data["mcpServers"])
