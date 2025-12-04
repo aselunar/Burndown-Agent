@@ -37,7 +37,7 @@ This is the cleanest method. You run the script on your Mac/Windows host, target
    git clone https://github.com/aselunar/Burndown-Agent.git
    cd Burndown-Agent
    ```
-   
+
 2.  Run the script targeting your other repository:
 
     ```bash
@@ -147,7 +147,8 @@ Note: You will need to activate the venv first: source .roo/venv/bin/activate
 
 ---
 
-🐛 Troubleshooting
+## 🐛 Troubleshooting
+
 "No tasks found" but I have work items:
 
 * Check `.env` has correct `AZURE_DEVOPS_ORG_URL` with project name
@@ -173,6 +174,6 @@ Changes to `burndown_server.py` not taking effect:
 
 ---
 
-🏆 Hackathon 2025
+## 🏆 Hackathon 2025
 
 Built to solve real DevOps friction: connecting enterprise backlogs to AI coding assistants without the config nightmare.
