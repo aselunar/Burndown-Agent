@@ -287,7 +287,7 @@ python-dotenv
                                 if "alpine" in df.read().lower():
                                     is_alpine = True
                                     print(f"🔍 Detected Alpine in {build['dockerfile']}")
-                        except: pass
+                        except (FileNotFoundError, IOError): pass
 
             if is_alpine:
                 install_cmd = "apk add --no-cache python3 py3-pip py3-virtualenv"
