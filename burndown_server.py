@@ -26,7 +26,6 @@ if ADO_ORG_URL:
 def get_base_url():  
     if not ADO_ORG_URL:  
         return None  
-    from urllib.parse import urlparse  
     parsed = urlparse(ADO_ORG_URL.rstrip('/'))  
     return f"{parsed.scheme}://{parsed.netloc}/{parsed.path.split('/')[1]}"  
 
