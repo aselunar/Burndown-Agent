@@ -3,6 +3,7 @@ import base64
 import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from urllib.parse import unquote
 
 # Environment Setup
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +21,6 @@ PROJECT_NAME = None
 if ADO_ORG_URL:
     url_parts = ADO_ORG_URL.rstrip('/').split('/')
     if len(url_parts) >= 5:
-        from urllib.parse import unquote
         PROJECT_NAME = unquote(url_parts[4])
 
 def get_headers():
