@@ -57,13 +57,14 @@ class BurndownSetup:
         self._load_env_file()
 
     def _create_requirements_file(self):
-        """Create requirements.txt with correct dependencies"""
-        req_content = """fastmcp
-requests
-python-dotenv
-"""
-        with open(self.dest_requirements, "w") as f:
-            f.write(req_content)
+        source_req = Path("requirements.txt")
+        if source_req.exists():
+            with open(source_req, "r") as src, open(self.dest_requirements, "w") as dst:
+                dst.write(src.read())
+        else:
+            # If source requirements.txt does not exist, create an empty file or handle as needed
+            with open(self.dest_requirements, "w") as dst:
+                dst.write("")
 
     def _load_env_file(self):
         if not self.env_file_path.exists(): return
