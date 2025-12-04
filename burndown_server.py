@@ -126,6 +126,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
     """
     Fetches the next batch of tasks to burn down from Azure DevOps.
     """
+    if limit <= 0: raise ValueError("Limit must be a positive integer")
     try:
         if not project_name:
             return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL Expected format: https://dev.azure.com/org/project or https://org.visualstudio.com/project"
