@@ -124,6 +124,7 @@ class BurndownSetup:
             print(f"✅ Installed logic to {self.dest_agent_script}")
         else:
             print(f"⚠️  Source script missing. Ensure burndown_server.py is present.")
+            sys.exit(1)
 
         # Create requirements.txt with correct content
         self._create_requirements_file()

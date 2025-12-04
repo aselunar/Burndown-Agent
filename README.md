@@ -135,6 +135,7 @@ To test changes without copying files:
 2. Edit burndown_server.py (source file in project root)
 3. Restart the MCP server in RooCode
 4. Test changes immediately
+
 Note: You will need to activate the venv first: source .roo/venv/bin/activate
 
 ---
