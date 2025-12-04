@@ -157,6 +157,7 @@ class BurndownSetup:
             print(f"❌ Error installing dependencies: {e}")
             print(f"stdout: {e.stdout.decode() if e.stdout else ''}")
             print(f"stderr: {e.stderr.decode() if e.stderr else ''}")
+            sys.exit(1)
 
     # --- 3. SERVER CONFIGURATION ---
     def configure_servers(self):
