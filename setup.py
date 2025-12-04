@@ -165,7 +165,7 @@ class BurndownSetup:
         gh_token = self.get_user_input("GitHub Personal Access Token", "GITHUB_PERSONAL_ACCESS_TOKEN")
         
         print("\n--- Configuring Azure DevOps MCP ---")
-        print("ℹ️  Tip: Enter the Organization Name (e.g. 'ExampleOrg') or Project URL.")
+        print("ℹ️  Tip: Enter the Project URL. ie. https://dev.azure.com/yourorg/yourproject")
         ado_scope = self.get_user_input("Azure DevOps Scope", "AZURE_DEVOPS_SCOPE")
         ado_token = self.get_user_input("Azure DevOps PAT", "AZURE_DEVOPS_EXT_PAT")
 
