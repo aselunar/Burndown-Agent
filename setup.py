@@ -152,9 +152,10 @@ python-dotenv
             subprocess.run([str(pip_path), "install", "-r", str(self.dest_requirements)], 
                         check=True, capture_output=True)
             print("✅ Dependencies installed")
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
             print(f"❌ Error installing dependencies: {e}")
-            sys.exit(1)
+            print(f"stdout: {e.stdout}")
+            print(f"stderr: {e.stderr}")
 
     # --- 3. SERVER CONFIGURATION ---
     def configure_servers(self):
