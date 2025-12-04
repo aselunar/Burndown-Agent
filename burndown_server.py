@@ -45,15 +45,36 @@ def extract_project_name(ado_url):
         return None
 project_name = extract_project_name(ADO_ORG_URL)
 
-def get_base_url():  
-    if not ADO_ORG_URL:  
-        return None  
-    parsed = urlparse(ADO_ORG_URL.rstrip('/'))  
-    path_parts = parsed.path.split('/')
-    if len(path_parts) > 1 and path_parts[1]:
-        return f"{parsed.scheme}://{parsed.netloc}/{path_parts[1]}"
-    return None
 
+def get_base_url():
+    """
+    Constructs the base URL for Azure DevOps REST API calls, handling both dev.azure.com and visualstudio.com formats.
+    Returns None if the URL format is unrecognized.
+    """
+    if not ADO_ORG_URL:
+        return None
+    try:
+        parsed = urlparse(ADO_ORG_URL.rstrip('/'))
+        # dev.azure.com/org/project/_apis/...
+        if parsed.netloc.endswith("dev.azure.com"):
+            path_parts = [p for p in parsed.path.split('/') if p]
+            if len(path_parts) >= 2:
+                org = path_parts[0]
+                project = path_parts[1]
+                return f"{parsed.scheme}://{parsed.netloc}/{org}/{project}"
+        # org.visualstudio.com/project/_apis/...
+        elif parsed.netloc.endswith("visualstudio.com"):
+            org = parsed.netloc.split('.')[0]
+            path_parts = [p for p in parsed.path.split('/') if p]
+            if len(path_parts) >= 1:
+                project = path_parts[0]
+                return f"{parsed.scheme}://{parsed.netloc}/{project}"
+        # Unknown format
+        return None
+    except Exception as e:
+        print(f"Error constructing base URL from ADO_ORG_URL: {e}")
+        return None
+    
 def get_headers():
     if not ADO_PAT: return None
     auth = base64.b64encode(f":{ADO_PAT}".encode()).decode()
