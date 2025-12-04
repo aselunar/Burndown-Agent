@@ -167,6 +167,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                         if item['id'] not in seen_ids:
                             tasks.append(item)
                             seen_ids.add(item['id'])
+                    no_progress_count = 0
                 
                 # Track progress per iteration
                 tasks_added = (len(tasks) > initial_len)
