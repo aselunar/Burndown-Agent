@@ -42,7 +42,7 @@ def run_wiql(query: str):
         response = requests.post(api_url, headers=get_headers(), json={"query": query})
         if response.status_code == 200:
             return response.json().get("workItems", [])
-        else :
+        else:
             print(f"WIQL query failed with status {response.status_code}: {response.text}")
     except requests.RequestException as e:  
         # Handle network/API errors  
