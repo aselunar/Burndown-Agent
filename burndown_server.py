@@ -69,7 +69,7 @@ def run_wiql(query: str):
             return response.json().get("workItems", [])
         else:
             print(f"WIQL query failed with status {response.status_code}: {response.text}")
-    except (requests.RequestException, Exception) as e:  
+    except Exception as e:  
         print(f"Unexpected error in run_wiql: {e}")  
         return [] 
 
