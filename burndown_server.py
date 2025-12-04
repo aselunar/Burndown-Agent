@@ -69,14 +69,33 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
         
         if prioritize_parents:
             # Fetch Top Parents
-            pq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') AND [System.WorkItemType] IN ('Feature','Epic','User Story') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
+            pq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
             parents = run_wiql(pq)
+            seen_ids = set()  # Track what we've already added
+            
             for p in parents:
                 if len(tasks) >= limit: break
+                
+                # Skip if already added
+                if p['id'] in seen_ids:
+                    continue
+                    
                 cq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.Parent]={p['id']} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed')"
                 children = run_wiql(cq)
                 if children:
-                    tasks.extend(get_work_items([c['id'] for c in children]))
+                    # Has children - add the children (they're bottom level)
+                    child_items = get_work_items([c['id'] for c in children])
+                    for item in child_items:
+                        if item['id'] not in seen_ids:
+                            tasks.append(item)
+                            seen_ids.add(item['id'])
+                else:
+                    # No children - parent itself is bottom level
+                    parent_items = get_work_items([p['id']])
+                    for item in parent_items:
+                        if item['id'] not in seen_ids:
+                            tasks.append(item)
+                            seen_ids.add(item['id'])
         else:
             # Direct Query
             q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
