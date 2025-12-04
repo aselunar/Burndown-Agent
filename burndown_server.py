@@ -94,6 +94,15 @@ def run_wiql(query: str):
         return [] 
 
 def get_work_items(ids: list):
+    """
+    Fetches Azure DevOps work items for the given list of IDs.
+    This function splits the list of IDs into chunks of 200 to avoid API limits,
+    and fetches each chunk in a separate request. All results are combined into a single list.
+    Parameters:
+        ids (list): List of work item IDs to fetch.
+    Returns:
+        list: List of work item dictionaries returned by the API, or an empty list on error.
+    """
     if not ids: return []
     try:
         chunk_size = 200
