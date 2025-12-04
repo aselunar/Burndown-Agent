@@ -3,7 +3,7 @@ import base64
 import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 # Environment Setup
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +23,13 @@ if ADO_ORG_URL:
     if len(url_parts) >= 5:
         PROJECT_NAME = unquote(url_parts[4])
 
+def get_base_url():  
+    if not ADO_ORG_URL:  
+        return None  
+    from urllib.parse import urlparse  
+    parsed = urlparse(ADO_ORG_URL.rstrip('/'))  
+    return f"{parsed.scheme}://{parsed.netloc}/{parsed.path.split('/')[1]}"  
+
 def get_headers():
     if not ADO_PAT: return None
     auth = base64.b64encode(f":{ADO_PAT}".encode()).decode()
@@ -30,21 +37,28 @@ def get_headers():
 
 def run_wiql(query: str):
     if not ADO_ORG_URL or not ADO_PAT: return []
-    base_url = ADO_ORG_URL.rstrip('/').split('/')[0] + '//' + ADO_ORG_URL.rstrip('/').split('/')[2] + '/' + ADO_ORG_URL.rstrip('/').split('/')[3]
+    base_url = get_base_url()
     api_url = f"{base_url}/_apis/wit/wiql?api-version=6.0"
     try:
         response = requests.post(api_url, headers=get_headers(), json={"query": query})
         if response.status_code == 200:
             return response.json().get("workItems", [])
-    except: pass
-    return []
+        else :
+            print(f"WIQL query failed with status {response.status_code}: {response.text}")
+    except requests.RequestException as e:  
+        # Handle network/API errors  
+        return []  
+    except Exception as e:  
+        # Log unexpected errors for debugging  
+        print(f"Unexpected error in run_wiql: {e}")  
+        return []  
 
 def get_work_items(ids: list):
     if not ids: return []
     try:
         chunk_size = 200
         all_items = []
-        base_url = ADO_ORG_URL.rstrip('/').split('/')[0] + '//' + ADO_ORG_URL.rstrip('/').split('/')[2] + '/' + ADO_ORG_URL.rstrip('/').split('/')[3]
+        base_url = get_base_url()
         for i in range(0, len(ids), chunk_size):
             chunk = ids[i:i + chunk_size]
             ids_str = ",".join(map(str, chunk))
@@ -53,7 +67,9 @@ def get_work_items(ids: list):
             if res.status_code == 200:
                 all_items.extend(res.json().get("value", []))
         return all_items
-    except: return []
+    except requests.RequestException as e:  
+        print(f"Error fetching work items: {e}")  
+        return []  
 
 # @mcp.tool()
 def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) -> str:
