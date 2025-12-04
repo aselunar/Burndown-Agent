@@ -75,12 +75,12 @@ def get_base_url():
         return None
     
 def get_headers():
-    if not ADO_PAT: return None
+    if not ADO_PAT: raise Exception("ADO_PAT is not set")
     auth = base64.b64encode(f":{ADO_PAT}".encode()).decode()
     return {"Authorization": f"Basic {auth}", "Content-Type": "application/json"}
 
 def run_wiql(query: str):
-    if not ADO_ORG_URL or not ADO_PAT: return []
+    if not ADO_ORG_URL or not ADO_PAT: raise Exception("AZURE_DEVOPS_ORG_URL or AZURE_DEVOPS_TOKEN is not set")
     base_url = get_base_url()
     api_url = f"{base_url}/_apis/wit/wiql?api-version=6.0"
     try:
