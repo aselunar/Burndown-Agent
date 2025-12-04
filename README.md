@@ -172,4 +172,5 @@ Changes to `burndown_server.py` not taking effect:
 ---
 
 🏆 Hackathon 2025
+
 Built to solve real DevOps friction: connecting enterprise backlogs to AI coding assistants without the config nightmare.
