@@ -130,14 +130,17 @@ class BurndownSetup:
 
         # Create virtual environment
         venv_path = self.settings_dir / "venv"
-        if not venv_path.exists():
-            print("🔧 Creating virtual environment...")
-            try:
-                subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
-                print("✅ Virtual environment created")
-            except Exception as e:
-                print(f"❌ Error creating venv: {e}")
-                sys.exit(1)
+        if venv_path.exists():
+            print("🔧 Removing existing venv...")
+            shutil.rmtree(venv_path)
+
+        print("🔧 Creating virtual environment...")
+        try:
+            subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
+            print("✅ Virtual environment created")
+        except Exception as e:
+            print(f"❌ Error creating venv: {e}")
+            sys.exit(1)
 
         # Install dependencies
         print("📦 Installing dependencies...")
