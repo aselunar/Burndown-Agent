@@ -59,8 +59,8 @@ class BurndownSetup:
     def _create_requirements_file(self):
         """Create requirements.txt with correct dependencies"""
         req_content = """fastmcp
-    requests
-    python-dotenv
+requests
+python-dotenv
     """
         with open(self.dest_requirements, "w") as f:
             f.write(req_content)
