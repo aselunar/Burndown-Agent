@@ -248,7 +248,11 @@ python-dotenv
             target_mount = "/home/vscode/.vscode-server/data"
             mount_str = f"source=vscode-server-data,target={target_mount},type=volume"
             
-            if not any("vscode-server-data" in m for m in mounts):
+            mount_exists = any(
+                "source=vscode-server-data" in m and f"target={target_mount}" in m
+                for m in mounts
+            )
+            if not mount_exists:
                 mounts.append(mount_str)
                 print(f"✅ Injected persistence mount.")
                 modified = True
