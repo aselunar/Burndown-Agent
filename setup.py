@@ -314,9 +314,9 @@ class BurndownSetup:
             ]
             def has_python_install(cmd):
                 subcommands = [c.strip() for c in re.split(r'&&|;', cmd) if c.strip()]
-                for cmd in subcommands:
+                for subcmd in subcommands:
                     for pat in python_install_patterns:
-                        if re.search(pat, cmd, re.IGNORECASE):
+                        if re.search(pat, subcmd, re.IGNORECASE):
                             return True
                 return False
             if not has_python_install(current_cmd):
