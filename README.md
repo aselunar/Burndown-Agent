@@ -139,7 +139,7 @@ Note: You will need to activate the venv first: source .roo/venv/bin/activate
 
 ---
 
-🏗️ What's Next
+## 🏗️ What's Next
 * GitHub PR automation - Currently creates issues; PR creation has MCP friction
 * Batch processing - Handle >100 work items with pagination
 * Status sync - Update ADO when GitHub issues close
