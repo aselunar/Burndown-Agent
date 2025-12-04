@@ -36,6 +36,8 @@ This is the cleanest method. You run the script on your Mac/Windows host, target
    ```bash
    git clone https://github.com/aselunar/Burndown-Agent.git
    cd Burndown-Agent
+   ```
+   
 2.  Run the script targeting your other repository:
 
     ```bash
