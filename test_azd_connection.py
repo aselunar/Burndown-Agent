@@ -1,7 +1,11 @@
-import os, base64, requests
+import os, base64, requests, sys
 from dotenv import load_dotenv
 from burndown_server import extract_project_name
 load_dotenv()
+
+if not os.getenv("AZURE_DEVOPS_EXT_PAT") or not os.getenv("AZURE_DEVOPS_ORG_URL"):
+    print("❌ Error: Please run 'python3 setup.py' first to set environment variables.")
+    sys.exit(1)
 
 pat = os.getenv("AZURE_DEVOPS_EXT_PAT")
 auth = base64.b64encode(f":{pat}".encode()).decode()
