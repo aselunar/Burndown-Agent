@@ -109,6 +109,9 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
             # Fetch Top Parents
             pq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
             parents = run_wiql(pq)
+            if not isinstance(parents, list):
+                print(f"Warning: run_wiql(pq) returned non-list: {parents}")
+                parents = []
             seen_ids = set()  # Track what we've already added
             
             for p in parents:
