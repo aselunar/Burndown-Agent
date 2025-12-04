@@ -106,6 +106,8 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                     # Has children - add the children (they're bottom level)
                     child_items = get_work_items([c['id'] for c in children])
                     for item in child_items:
+                        if len(tasks) >= limit:
+                            break
                         if item['id'] not in seen_ids:
                             tasks.append(item)
                             seen_ids.add(item['id'])
@@ -113,6 +115,8 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                     # No children - parent itself is bottom level
                     parent_items = get_work_items([p['id']])
                     for item in parent_items:
+                        if len(tasks) >= limit:
+                            break
                         if item['id'] not in seen_ids:
                             tasks.append(item)
                             seen_ids.add(item['id'])
