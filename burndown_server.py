@@ -79,7 +79,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                     tasks.extend(get_work_items([c['id'] for c in children]))
         else:
             # Direct Query
-            q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') AND [System.WorkItemType] IN ('Task','Bug','User Story') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
+            q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
             refs = run_wiql(q)
             tasks.extend(get_work_items([r['id'] for r in refs[:limit]]))
 
