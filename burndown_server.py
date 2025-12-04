@@ -135,13 +135,19 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                 parents = []
             seen_ids = set()  # Track what we've already added
             
-            for p in parents:
-                if len(tasks) >= limit: break
+            max_parents = min(len(parents), limit * 3)
+            no_progress_count = 0
+
+            for i, p in enumerate(parents):
+                if len(tasks) >= limit or i >= max_parents or no_progress_count >= 10:
+                    break
                 
                 # Skip if already added
                 if p['id'] in seen_ids:
                     continue
-                    
+                
+                initial_len = len(tasks)
+                
                 cq = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.Parent]={p['id']} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed')"
                 children = run_wiql(cq)
                 if children:
@@ -162,6 +168,10 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                         if item['id'] not in seen_ids:
                             tasks.append(item)
                             seen_ids.add(item['id'])
+                
+                # Track progress per iteration
+                tasks_added = (len(tasks) > initial_len)
+                no_progress_count = 0 if tasks_added else no_progress_count + 1
         else:
             # Direct Query
             q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
