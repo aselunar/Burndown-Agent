@@ -61,7 +61,7 @@ class BurndownSetup:
         req_content = """fastmcp
 requests
 python-dotenv
-    """
+"""
         with open(self.dest_requirements, "w") as f:
             f.write(req_content)
 
