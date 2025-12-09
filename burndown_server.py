@@ -129,7 +129,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
     if limit <= 0: raise ValueError("Limit must be a positive integer")
     try:
         if not project_name:
-            return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL Expected format: https://dev.azure.com/org/project or https://org.visualstudio.com/project"
+            return "❌ Error: Could not extract project name from AZURE_DEVOPS_ORG_URL . Expected format: https://dev.azure.com/org/project or https://org.visualstudio.com/project"
         
         project_filter = f"[System.TeamProject]='{project_name}'"
         tasks = []
@@ -146,7 +146,6 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
             max_parents = min(len(parents), limit * 3)
 
             parent_ids = [p['id'] for i, p in enumerate(parents) if i < max_parents]
-            initial_len = len(tasks)
             if parent_ids:
                 # Batch query for all children of these parents
                 parent_ids_str = ",".join(str(pid) for pid in parent_ids)
