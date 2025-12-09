@@ -1,4 +1,4 @@
-# Manual integration test for burndown_server. Run after setting up environment variables with setup.py.
+# Manual integration test for burndown_server. Requires .env file with environment variables (can be created by running setup.py).
 # Sometimes you need to test the mcp logic outside of the MCP server context.
 import sys
 sys.path.insert(0, '.')
