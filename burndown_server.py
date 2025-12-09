@@ -145,7 +145,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
             
             max_parents = min(len(parents), limit * 3)
 
-            parent_ids = [p['id'] for i, p in enumerate(parents) if i < max_parents and p['id'] not in seen_ids]
+            parent_ids = [p['id'] for i, p in enumerate(parents) if i < max_parents]
             initial_len = len(tasks)
             if parent_ids:
                 # Batch query for all children of these parents
@@ -181,8 +181,6 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                             if item['id'] not in seen_ids:
                                 tasks.append(item)
                                 seen_ids.add(item['id'])
-            # Track progress for batching
-            tasks_added = (len(tasks) > initial_len)
         else:
             # Direct Query
             q = f"SELECT [System.Id] FROM WorkItems WHERE {project_filter} AND [System.State] NOT IN ('Closed','Removed','Resolved','Done','Completed') ORDER BY [Microsoft.VSTS.Common.Priority] ASC"
