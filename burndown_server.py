@@ -119,7 +119,7 @@ def get_work_items(ids: list):
                 print(f"Failed to fetch work items for chunk {ids_str}: {res.status_code}: {res.text}")
         return all_items
     except requests.RequestException as e:  
-        raise Exception(f"Error fetching work items: {e}")
+        raise Exception(f"Error fetching work items: {e}") from e
 
 # Internal implementation for testing
 def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) -> str:
@@ -200,7 +200,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
 
     except Exception as e:
         print(f"Unexpected error in _get_burndown_tasks_impl: {e}")
-        raise Exception(f"❌ Error fetching tasks: {str(e)}")
+        raise Exception(f"❌ Error fetching tasks: {str(e)}") from e
     
 @mcp.tool()
 def get_burndown_tasks(limit: int = 5, prioritize_parents: bool = True) -> str:
