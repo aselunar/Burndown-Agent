@@ -321,19 +321,19 @@ class BurndownSetup:
                         if re.search(pat, subcmd, re.IGNORECASE):
                             return True
                 return False
+            commands_added = False
             if not has_python_install(current_cmd):
                 commands.append(install_cmd)
-
+                commands_added = True
             # 2. Pip requirements (if not present)
             if "requirements.txt" not in current_cmd:
                 commands.append(pip_cmd)
-
+                commands_added = True
             # 3. Existing command (if any and not empty)
             if current_cmd and current_cmd.strip():
                 commands.append(current_cmd)
-
             # Only update if we added something new
-            if len(commands) > (1 if current_cmd and current_cmd.strip() else 0):
+            if commands_added:
                 data["postCreateCommand"] = " && ".join(commands)
                 print(f"✅ Updated postCreateCommand")
                 modified = True
