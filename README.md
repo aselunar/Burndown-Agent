@@ -136,7 +136,7 @@ To test changes without copying files:
 3. Restart the MCP server in RooCode
 4. Test changes immediately
 
-Note: You will need to activate the venv first: source .roo/venv/bin/activate
+Note: You will need to activate the venv first: `source .roo/venv/bin/activate`
 
 ---
 

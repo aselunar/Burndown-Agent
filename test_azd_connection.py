@@ -17,7 +17,7 @@ url = os.getenv("AZURE_DEVOPS_ORG_URL")
 
 api_url = f"{url}/_apis/wit/wiql?api-version=6.0"
 
-# Extract project from env or use default
+# Extract project from env or use default.
 try:
     project = extract_project_name(url) or "Burndown Agent"
     query = {"query": f"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject]='{project}'"}
