@@ -155,7 +155,7 @@ def _get_burndown_tasks_impl(limit: int = 5, prioritize_parents: bool = True) ->
                 if children:
                     # Map parent id to its children
                     for c in children:
-                        pid = c.get('parent') or c.get('System.Parent')
+                        pid = c.get('fields', {}).get('System.Parent')
                         if pid:
                             child_id_map.setdefault(pid, []).append(c['id'])
                 # For each parent, add children if any, else add parent itself
