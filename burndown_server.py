@@ -101,7 +101,7 @@ def get_work_items(ids: list):
     Parameters:
         ids (list): List of work item IDs to fetch.
     Returns:
-        list: List of work item dictionaries returned by the API, or an empty list on error.
+        list: List of work item dictionaries returned by the API. Raises Exception if the request fails.
     """
     if not ids: return []
     try:

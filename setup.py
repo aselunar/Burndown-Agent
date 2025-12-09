@@ -138,7 +138,7 @@ class BurndownSetup:
 
         print("🔧 Creating virtual environment...")
         try:
-            subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
+            subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True, capture_output=True)
             print("✅ Virtual environment created")
         except Exception as e:
             print(f"❌ Error creating venv: {e}")
