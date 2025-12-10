@@ -208,3 +208,6 @@ __marimo__/
 
 .history
 burndown_mcp_config.json
+
+# Local Secrets
+.roo/
