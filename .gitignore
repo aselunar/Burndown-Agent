@@ -211,3 +211,7 @@ burndown_mcp_config.json
 
 # Local Secrets
 .roo/
+
+# Node.js (CodeSignal practice JS)
+codesignal/practice_assessments_js/node_modules/
+codesignal/practice_assessments_js/package-lock.json

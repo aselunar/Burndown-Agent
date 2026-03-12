@@ -1,0 +1,29 @@
+{
+  "name": "codesignal-practice-js",
+  "version": "1.0.0",
+  "description": "JavaScript solutions + Jest tests for CodeSignal progressive assessments",
+  "scripts": {
+    "test": "jest",
+    "test:bank": "jest banking_system",
+    "test:file": "jest file_storage",
+    "test:db": "jest in_memory_database",
+    "test:bank:l1": "jest bankingSystem.level1",
+    "test:bank:l2": "jest bankingSystem.level2",
+    "test:bank:l3": "jest bankingSystem.level3",
+    "test:bank:l4": "jest bankingSystem.level4",
+    "test:file:l1": "jest fileStorage.level1",
+    "test:file:l2": "jest fileStorage.level2",
+    "test:file:l3": "jest fileStorage.level3",
+    "test:file:l4": "jest fileStorage.level4",
+    "test:db:l1": "jest inMemoryDatabase.level1",
+    "test:db:l2": "jest inMemoryDatabase.level2",
+    "test:db:l3": "jest inMemoryDatabase.level3",
+    "test:db:l4": "jest inMemoryDatabase.level4"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
